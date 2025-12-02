@@ -29,39 +29,59 @@ st.set_page_config(page_title="PDF Knowledge Assistant", layout="centered")
 # ---- Enhanced CSS with better mobile support ----
 st.markdown("""
     <style>
-    body {
-        background-color: #f5f5f7;
+    /* Use CSS variables that adapt to Streamlit's theme */
+    :root {
+        --bg-primary: #f5f5f7;
+        --bg-secondary: #ffffff;
+        --text-primary: #1a1a1a;
+        --border-color: #e0e0e0;
+        --shadow: rgba(0,0,0,0.1);
     }
+    
+    /* Dark mode overrides */
+    [data-testid="stAppViewContainer"][data-theme="dark"] {
+        --bg-primary: #0e1117;
+        --bg-secondary: #262730;
+        --text-primary: #fafafa;
+        --border-color: #4a4a4a;
+        --shadow: rgba(0,0,0,0.3);
+    }
+    
     .fixed-title {
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        background: rgba(240, 242, 246, 0.95);
+        background: var(--bg-secondary);
         backdrop-filter: blur(10px);
-        border-bottom: 1px solid #ddd;
+        border-bottom: 1px solid var(--border-color);
         padding: 1rem;
         z-index: 999;
         text-align: center;
         font-size: 1.5rem;
         font-weight: bold;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 10px var(--shadow);
+        color: var(--text-primary);
     }
+    
     .main-content {
         padding-top: 80px;
     }
+    
     .user-message {
         display: flex;
         justify-content: flex-end;
         text-align: right;
         margin-bottom: 12px;
     }
+    
     .bot-message {
         display: flex;
         justify-content: flex-start;
         text-align: left;
         margin-bottom: 12px;
     }
+    
     .chat-bubble {
         max-width: 75%;
         padding: 14px 18px;
@@ -70,48 +90,62 @@ st.markdown("""
         word-wrap: break-word;
         font-size: 1rem;
         line-height: 1.4;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 10px var(--shadow);
     }
+    
     .user-bubble {
         background: linear-gradient(135deg, #007aff, #0051d5);
         color: white;
         border-bottom-right-radius: 6px;
     }
+    
     .bot-bubble {
-        background-color: #ffffff;
-        color: #1a1a1a;
-        border: 1px solid #e0e0e0;
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
         border-bottom-left-radius: 6px;
     }
+    
     .stats-container {
-        background: #f8f9fa;
+        background: var(--bg-secondary);
         padding: 1rem;
         border-radius: 10px;
-        border: 1px solid #e0e0e0;
+        border: 1px solid var(--border-color);
         margin-bottom: 1rem;
+        color: var(--text-primary);
     }
+    
     .upload-progress {
-        background: #e3f2fd;
+        background: var(--bg-secondary);
         border: 1px solid #2196f3;
         border-radius: 8px;
         padding: 12px;
         margin: 10px 0;
+        color: var(--text-primary);
     }
+    
     .success-message {
-        background: #e8f5e8;
+        background: var(--bg-secondary);
         border: 1px solid #4caf50;
         border-radius: 8px;
         padding: 12px;
         margin: 10px 0;
-        color: #2e7d32;
+        color: #4caf50;
     }
+    
     .warning-message {
-        background: #fff3e0;
+        background: var(--bg-secondary);
         border: 1px solid #ff9800;
         border-radius: 8px;
         padding: 12px;
         margin: 10px 0;
-        color: #f57c00;
+        color: #ff9800;
+    }
+    
+    /* Fix Streamlit's default dark mode text colors */
+    [data-theme="dark"] .stats-container h4,
+    [data-theme="dark"] .stats-container p {
+        color: var(--text-primary) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -180,10 +214,6 @@ if page == "Upload PDFs":
     )
     
     if uploaded_files:
-        st.markdown(f"**Selected Files ({len(uploaded_files)}):**")
-        for i, file in enumerate(uploaded_files, 1):
-            file_size = len(file.getbuffer()) / 1024
-            st.markdown(f"  {i}. {file.name} ({file_size:.1f} KB)")
         
         if st.session_state.upload_state == "normal":
             if st.button("🚀 Process PDFs", type="primary", use_container_width=True):
@@ -191,9 +221,20 @@ if page == "Upload PDFs":
                 st.rerun()
         elif st.session_state.upload_state == "uploading":
             st.button("⏳ Processing...", disabled=True, use_container_width=True)
-            
-            # Progress tracking
-            progress_bar = st.progress(0)
+        elif st.session_state.upload_state == "completed":
+            if st.button("✅ Processing Completed", disabled=False, use_container_width=True):
+                st.session_state.upload_state = "normal"
+                st.rerun()
+        elif st.session_state.upload_state == "partial":
+            if st.button("⚠️ Partially Completed", disabled=False, use_container_width=True):
+                st.session_state.upload_state = "normal"
+                st.rerun()
+        elif st.session_state.upload_state == "failed":
+            if st.button("❌ Processing Failed", disabled=False, use_container_width=True):
+                st.session_state.upload_state = "normal"
+                st.rerun()
+        
+        if st.session_state.upload_state == "uploading":
             status_container = st.container()
             
             success_count = 0
@@ -201,10 +242,6 @@ if page == "Upload PDFs":
             processing_errors = []
             
             for i, uploaded_file in enumerate(uploaded_files):
-                # Update progress
-                progress = i / total_files
-                progress_bar.progress(progress)
-                
                 with status_container:
                     st.markdown(f"""
                     <div class="upload-progress">
@@ -259,11 +296,16 @@ if page == "Upload PDFs":
                     if os.path.exists(temp_path):
                         try:
                             os.remove(temp_path)
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"⚠️ Could not delete {temp_path}: {e}") 
             
-            # Final progress update
-            progress_bar.progress(1.0)
+            # Update upload state based on results
+            if success_count == total_files:
+                st.session_state.upload_state = "completed"
+            elif success_count > 0:
+                st.session_state.upload_state = "partial"
+            else:
+                st.session_state.upload_state = "failed"
             
             # Better success/error reporting
             if success_count == total_files:
@@ -281,11 +323,12 @@ if page == "Upload PDFs":
                     for error in processing_errors:
                         st.error(f"• {error}")
             
-            st.session_state.upload_state = "normal"
-            
             # Auto-redirect to chat if successful
             if success_count > 0:
                 st.success("🎉 Ready to chat! Click 'Chat Assistant' to start asking questions.")
+            
+            # Trigger rerun to update button state
+            st.rerun()
 
 # ---- Chat Assistant Page ----
 elif page == "Chat Assistant":
