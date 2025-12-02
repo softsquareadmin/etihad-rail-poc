@@ -171,26 +171,16 @@ def chunk_text(text, chunk_size=1000, overlap=200):
     text_length = len(text)
     
     while start < text_length:
-        end = start + chunk_size
-        
-        # Try to break at a sentence or paragraph boundary
-        if end < text_length:
-            # Look for paragraph break
-            paragraph_break = text.rfind('\n\n', start, end)
-            if paragraph_break != -1 and paragraph_break > start:
-                end = paragraph_break
-            else:
-                # Look for sentence break
-                sentence_break = text.rfind('. ', start, end)
-                if sentence_break != -1 and sentence_break > start:
-                    end = sentence_break + 1
+        end = min(start + chunk_size, text_length)
         
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
         
-        # Move to next chunk with overlap
-        start = end - overlap if end < text_length else end
+        # Move to next chunk with overlap, ensuring forward progress
+        if end >= text_length:
+            break
+        start = end - overlap
     
     return chunks
 
@@ -268,8 +258,14 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         
         # Step 2: Chunk the text
         print("Chunking text...")
-        chunks = chunk_text(text, chunk_size=1000, overlap=200)
-        print(f"Created {len(chunks)} chunks")
+        try:
+            chunks = chunk_text(text, chunk_size=1000, overlap=200)
+            print(f"Created {len(chunks)} chunks")
+        except Exception as chunk_error:
+            print(f"Error during chunking: {chunk_error}")
+            import traceback
+            traceback.print_exc()
+            return False
         
         if not chunks:
             print("No chunks created")
@@ -304,4 +300,6 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
             
     except Exception as e:
         print(f"Error in process_pdf_and_upload: {e}")
+        import traceback
+        traceback.print_exc()
         return False

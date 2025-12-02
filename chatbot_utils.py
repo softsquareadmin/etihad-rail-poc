@@ -12,6 +12,7 @@ openai_client = OpenAI(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(pinecone_index_name)
 
+
 def embed_query(text, model="text-embedding-3-small"):
     """
     Create embedding for user query
@@ -98,8 +99,6 @@ def process_user_query(user_query, chat_history=None):
     """
     if chat_history is None:
         chat_history = []
-
-    print(f"Processing query: {user_query}")
     
     # Step 1: Embed the query
     query_embedding = embed_query(user_query)
@@ -111,8 +110,6 @@ def process_user_query(user_query, chat_history=None):
     
     if not matches:
         return "I don't have any information about that in my knowledge base. Please make sure you've uploaded relevant PDF documents."
-    
-    print(f"Found {len(matches)} relevant chunks")
     
     # Step 3: Build context from matches
     context = build_context_from_matches(matches)
