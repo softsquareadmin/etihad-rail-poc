@@ -183,7 +183,7 @@ Begin extraction now."""
         print(f"Error extracting text from PDF: {e}")
         return None
 
-def chunk_text(pages_data, chunk_size=1000, overlap=200):
+def chunk_text(pages_data, chunk_size=1000, overlap=400):
     """
     Split text into overlapping chunks for better context preservation
     """
@@ -319,7 +319,7 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         # Step 2: Chunk the text
         print("Chunking text...")
         try:
-            chunks = chunk_text(pages_data, chunk_size=1000, overlap=200)
+            chunks = chunk_text(pages_data, chunk_size=1000, overlap=400)
             print(f"Created {len(chunks)} chunks")
         except Exception as chunk_error:
             print(f"Error during chunking: {chunk_error}")
