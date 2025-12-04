@@ -25,8 +25,32 @@ def extract_text_from_pdf(pdf_path, gemini_api_key):
         if uploaded_file.state.name == "FAILED":
             raise ValueError(f"File processing failed: {uploaded_file.state.name}")
         
+        generation_config = {
+            "response_mime_type": "application/json",
+            "response_schema": {
+                "type": "object",
+                "properties": {
+                    "pages": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "page_number": {"type": "integer"},
+                                "content": {"type": "string"}
+                            },
+                            "required": ["page_number", "content"]
+                        }
+                    }
+                },
+                "required": ["pages"]
+            }
+        }
+        
         # Use Gemini to extract text with comprehensive formatting
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        model = genai.GenerativeModel(
+            model_name='gemini-2.5-pro',
+            generation_config=generation_config
+            )
         
         prompt = """Extract ALL text from this document with clear formatting and logical structure.
 
@@ -159,30 +183,54 @@ Begin extraction now."""
         print(f"Error extracting text from PDF: {e}")
         return None
 
-def chunk_text(text, chunk_size=1000, overlap=200):
+def chunk_text(pages_data, chunk_size=1000, overlap=200):
     """
     Split text into overlapping chunks for better context preservation
     """
-    if not text:
+    if not pages_data:
         return []
     
-    chunks = []
-    start = 0
-    text_length = len(text)
+    all_chunks = []
     
-    while start < text_length:
-        end = min(start + chunk_size, text_length)
+    for page in pages_data:
+        page_number = page.get("page_number")
+        content = page.get("content", "").strip()
         
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
+        if not content:
+            continue
         
-        # Move to next chunk with overlap, ensuring forward progress
-        if end >= text_length:
-            break
-        start = end - overlap
+        content_length = len(content)
+
+        if content_length <= chunk_size:
+            all_chunks.append({
+                "text": content,
+                "page_number": page_number,
+            })
+        else:
+            # Apply the original chunking logic to this page's content
+            page_chunks = []
+            start = 0
+            content_length = len(content)
+            
+            while start < content_length:
+                end = min(start + chunk_size, content_length)
+                
+                chunk_text = content[start:end].strip()
+                if chunk_text:
+                    page_chunks.append(chunk_text)
+                
+                # Move to next chunk with overlap, ensuring forward progress
+                if end >= content_length:
+                    break
+                start = end - overlap
+            
+            for chunk_text in page_chunks:
+                all_chunks.append({
+                    "text": chunk_text,
+                    "page_number": page_number,
+                })
     
-    return chunks
+    return all_chunks
 
 def embed_text(text, openai_api_key, model="text-embedding-3-small"):
     """
@@ -213,10 +261,10 @@ def upload_to_pinecone(chunks, embeddings, pdf_filename, pinecone_api_key, pinec
             vector_id = f"{pdf_filename}_chunk_{i}"
             
             metadata = {
-                "text": chunk,
+                "text": chunk["text"],
                 "source": pdf_filename,
                 "chunk_index": i,
-                "total_chunks": len(chunks)
+                "page_number": chunk["page_number"]
             }
             
             vectors_to_upsert.append({
@@ -248,18 +296,30 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         
         # Step 1: Extract text using Gemini
         print("Extracting text from PDF...")
-        text = extract_text_from_pdf(pdf_path, gemini_api_key)
+        json_response = extract_text_from_pdf(pdf_path, gemini_api_key)
         
-        if not text:
+        if not json_response:
             print("Failed to extract text from PDF")
             return False
         
-        print(f"Extracted {len(text)} characters")
+        try:
+            parsed_data = json.loads(json_response)
+            pages_data = parsed_data.get("pages", [])
+            
+            if not pages_data:
+                print("No pages found in JSON response")
+                return False
+            
+            print(f"Extracted {len(pages_data)} pages")
+            
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse JSON response: {e}")
+            return False
         
         # Step 2: Chunk the text
         print("Chunking text...")
         try:
-            chunks = chunk_text(text, chunk_size=1000, overlap=200)
+            chunks = chunk_text(pages_data, chunk_size=1000, overlap=200)
             print(f"Created {len(chunks)} chunks")
         except Exception as chunk_error:
             print(f"Error during chunking: {chunk_error}")
@@ -274,15 +334,15 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         # Step 3: Create embeddings for each chunk
         print("Creating embeddings...")
         embeddings = []
-        for i, chunk in enumerate(chunks):
+        for i, chunk_dict in enumerate(chunks):
             if i % 10 == 0:
-                print(f"  Embedding chunk {i+1}/{len(chunks)}...")
+                print(f"  Embedding chunk {i+1}/{len(chunks)} (Page {chunk_dict['page_number']})...")
             
-            embedding = embed_text(chunk, openai_api_key)
+            embedding = embed_text(chunk_dict["text"], openai_api_key)
             if embedding:
                 embeddings.append(embedding)
             else:
-                print(f"Failed to create embedding for chunk {i}")
+                print(f"Failed to create embedding for chunk {i} (Page {chunk_dict['page_number']})")
                 return False
         
         print(f"Created {len(embeddings)} embeddings")
