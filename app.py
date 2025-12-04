@@ -147,6 +147,44 @@ st.markdown("""
     [data-theme="dark"] .stats-container p {
         color: var(--text-primary) !important;
     }
+
+    /* Fixed FAQ Container styling */
+    .faq-container {
+        position: sticky;
+        bottom: 0;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        padding: 12px 0;
+        z-index: 100;
+        box-shadow: 0 -2px 10px var(--shadow);
+        margin-top: 10px;
+    }
+
+    .faq-button {
+        display: inline-block;
+        padding: 10px 16px;
+        background: linear-gradient(135deg, #007aff, #0051d5);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.3s ease;
+    }
+
+    .faq-button:hover {
+        background: linear-gradient(135deg, #0051d5, #003d99);
+        box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+    }
+
+    .faq-content {
+        margin-top: 12px;
+        padding: 12px;
+        background: var(--bg-primary);
+        border-radius: 8px;
+        border-left: 4px solid #007aff;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -161,6 +199,8 @@ if "upload_state" not in st.session_state:
     st.session_state.upload_state = "normal"
 if "processed_files" not in st.session_state:
     st.session_state.processed_files = []
+if "faq_open" not in st.session_state:
+    st.session_state.faq_open = False
 
 # ---- Sidebar with Enhanced Navigation ----
 with st.sidebar:
@@ -340,7 +380,7 @@ elif page == "Chat Assistant":
     else:
         # Chat interface
         chat_container = st.container()
-        
+
         with chat_container:
             # Render chat history
             for msg in st.session_state.chat_history:
@@ -353,28 +393,58 @@ elif page == "Chat Assistant":
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
-        
-        # Chat input
+
+        # Chat input - FULL WIDTH
         user_input = st.chat_input("Ask about your documents...")
-        
+
         if user_input:
             # Add user message to history
             st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
-            
+
             try:
                 # Process query
                 with st.spinner("🔍 Searching your documents..."):
                     bot_reply = process_user_query(user_input.strip(), st.session_state.chat_history[:-1])
-                
+
                 # Add bot response to history
                 st.session_state.chat_history.append({"role": "assistant", "content": bot_reply})
-                
+
             except Exception as ex:
                 error_msg = f"Sorry, I encountered an error: {str(ex)}"
                 st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
                 st.error(f"Error processing query: {ex}")
-            
+
             st.rerun()
+
+        # Frequently Asked Questions / Suggestions (expander - initially closed)
+        with st.expander("💡 Frequently Asked Questions / Suggestions", expanded=st.session_state.faq_open):
+            suggested_questions = [
+                "What are the key safety procedures described in the documents?",
+                "Summarize maintenance schedule guidelines.",
+                "What are the contact details for emergency?",
+                "Available temperature ranges?"
+            ]
+
+            cols = st.columns(3)
+            for i, q in enumerate(suggested_questions):
+                col = cols[i % len(cols)]
+                if col.button(q, key=f"suggestion_{i}"):
+                    # When a suggestion is clicked, add as user input and process it
+                    st.session_state.chat_history.append({"role": "user", "content": q})
+                    try:
+                        with st.spinner("🔍 Searching your documents..."):
+                            bot_reply = process_user_query(q, st.session_state.chat_history[:-1])
+
+                        st.session_state.chat_history.append({"role": "assistant", "content": bot_reply})
+                    except Exception as ex:
+                        error_msg = f"Sorry, I encountered an error: {str(ex)}"
+                        st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
+                        st.error(f"Error processing suggestion: {ex}")
+
+                    # Auto-close the FAQ and rerun to show updated chat
+                    st.session_state.faq_open = False
+                    st.rerun()
+
 
 # ---- Database Management Page ----
 elif page == "Database Management":

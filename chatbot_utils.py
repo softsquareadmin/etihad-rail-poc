@@ -37,6 +37,7 @@ def search_pinecone(query_embedding, top_k=5):
             top_k=top_k,
             include_metadata=True
         )
+        print("response ::::: Pinecone",response)
         return response.matches
     except Exception as e:
         print(f"Pinecone query error: {e}")
