@@ -4,6 +4,7 @@ import time
 from openai import OpenAI, OpenAIError
 from pinecone import Pinecone
 import google.generativeai as genai
+import httpx
 
 def extract_text_from_pdf(pdf_path, gemini_api_key):
     """
@@ -363,3 +364,36 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         import traceback
         traceback.print_exc()
         return False
+
+def render_pdf_page_to_png_bytes(pdf_url: str, page_number: int = 1, zoom: float = 2.0) -> bytes:
+    
+    try:
+        import fitz
+    except Exception as e:
+        raise RuntimeError("PyMuPDF (fitz) is required for rendering. Install pymupdf.") from e
+
+    if page_number < 1:
+        raise ValueError("page_number must be >= 1")
+
+    # Fetch PDF from URL
+    try:
+        response = httpx.get(pdf_url, timeout=30.0)
+        response.raise_for_status()
+        pdf_bytes = response.content
+    except httpx.HTTPError as e:
+        raise Exception(f"Failed to fetch PDF: {str(e)}") from e
+
+    # Open PDF and render page
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    
+    try:
+        if page_number > doc.page_count:
+            raise ValueError(f"page_number out of range (1..{doc.page_count})")
+
+        page = doc.load_page(page_number - 1)
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        png_bytes = pix.tobytes("png")
+        return png_bytes
+    finally:
+        doc.close()

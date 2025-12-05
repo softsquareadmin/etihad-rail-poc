@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import dotenv
-from pdf_processor import process_pdf_and_upload
+from pdf_processor import process_pdf_and_upload, render_pdf_page_to_png_bytes
 from chatbot_utils import process_user_query
 from pinecone import Pinecone
 
@@ -23,6 +23,8 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone_index_name = os.getenv("PINECONE_INDEX_NAME")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
+
+PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
 
 st.set_page_config(page_title="PDF Knowledge Assistant", layout="centered")
 
@@ -188,6 +190,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+@st.dialog("Source page", width="medium")
+def show_source_dialog(png_bytes: bytes):
+    st.image(png_bytes)
+
 # ---- Fixed Title ----
 st.markdown('<div class="fixed-title">PDF Knowledge Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
@@ -288,24 +294,25 @@ if page == "Upload PDFs":
                         <strong>Processing:</strong> {uploaded_file.name} ({i+1}/{total_files})
                     </div>
                     """, unsafe_allow_html=True)
-                
-                # Better temporary file naming to avoid conflicts
-                import time
-                timestamp = str(int(time.time() * 1000))
-                temp_filename = f"temp_{timestamp}_{uploaded_file.name.replace(' ', '_')}"
-                temp_path = temp_filename
-                
+                # Ensure persistent PDF storage directory exists
+                pdf_dir = os.getenv("PDF_DIR", "pdfs")
+                os.makedirs(pdf_dir, exist_ok=True)
+
+                # Save uploaded file using the original filename (spaces replaced)
+                safe_name = uploaded_file.name.replace(' ', '_')
+                saved_path = os.path.join(pdf_dir, safe_name)
+
                 try:
-                    # Save uploaded file temporarily
-                    with open(temp_path, "wb") as f:
+                    # Save canonical file for future rendering and reference
+                    with open(saved_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
-                    
-                    # Use processing pipeline
+
+                    # Use processing pipeline on the saved canonical file
                     result = process_pdf_and_upload(
-                        temp_path, 
+                        saved_path,
                         gemini_api_key,
                         openai_api_key,
-                        pinecone_api_key, 
+                        pinecone_api_key,
                         pinecone_index_name
                     )
                     
@@ -333,11 +340,11 @@ if page == "Upload PDFs":
                     })
                 finally:
                     # Clean up temporary file
-                    if os.path.exists(temp_path):
+                    if os.path.exists(saved_path):
                         try:
-                            os.remove(temp_path)
+                            os.remove(saved_path)
                         except Exception as e:
-                            print(f"⚠️ Could not delete {temp_path}: {e}") 
+                            print(f"⚠️ Could not delete {saved_path}: {e}") 
             
             # Update upload state based on results
             if success_count == total_files:
@@ -382,17 +389,31 @@ elif page == "Chat Assistant":
         chat_container = st.container()
 
         with chat_container:
-            # Render chat history
-            for msg in st.session_state.chat_history:
+            for i, msg in enumerate(st.session_state.chat_history):
                 css_class = "user-message" if msg["role"] == "user" else "bot-message"
                 bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
-                st.markdown(f"""
+                
+                bubble_html = f"""
                     <div class="{css_class}">
                         <div class="chat-bubble {bubble_class}">
                             {msg["content"]}
                         </div>
                     </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(bubble_html, unsafe_allow_html=True)
+                
+                if msg["role"] == "assistant" and msg.get("groundings"):
+                    grounding = msg["groundings"][0]
+                    src = grounding.get("source")
+                    page_no = grounding.get("page_number")
+                    
+                    if src and page_no:
+                        api_base = os.getenv("IMAGE_API_BASE", "http://localhost:8000")
+                        img_url = f"{api_base}/generate_image?page={int(page_no)}&zoom=2"
+                        
+                        if st.button("📄 View Source", key=f"view_source_{i}"):
+                            png_bytes = render_pdf_page_to_png_bytes(PDF_URL, page_number=int(page_no), zoom=2.0)
+                            show_source_dialog(png_bytes)
 
         # Chat input - FULL WIDTH
         user_input = st.chat_input("Ask about your documents...")
@@ -404,10 +425,19 @@ elif page == "Chat Assistant":
             try:
                 # Process query
                 with st.spinner("🔍 Searching your documents..."):
-                    bot_reply = process_user_query(user_input.strip(), st.session_state.chat_history[:-1])
+                    bot_reply, matches = process_user_query(user_input.strip(), st.session_state.chat_history[:-1])
 
-                # Add bot response to history
-                st.session_state.chat_history.append({"role": "assistant", "content": bot_reply})
+                # Prepare grounding metadata list from matches
+                groundings = []
+                for m in (matches or []):
+                    md = getattr(m, "metadata", None) or m.get("metadata", {})
+                    source = md.get("source")
+                    page_no = md.get("page_number") or md.get("page")
+                    if source and page_no:
+                        groundings.append({"source": source, "page_number": page_no})
+
+                # Add bot response to history with grounding metadata
+                st.session_state.chat_history.append({"role": "assistant", "content": bot_reply, "groundings": groundings})
 
             except Exception as ex:
                 error_msg = f"Sorry, I encountered an error: {str(ex)}"
@@ -433,9 +463,17 @@ elif page == "Chat Assistant":
                     st.session_state.chat_history.append({"role": "user", "content": q})
                     try:
                         with st.spinner("🔍 Searching your documents..."):
-                            bot_reply = process_user_query(q, st.session_state.chat_history[:-1])
+                            bot_reply, matches = process_user_query(q, st.session_state.chat_history[:-1])
 
-                        st.session_state.chat_history.append({"role": "assistant", "content": bot_reply})
+                            groundings = []
+                            for m in (matches or []):
+                                md = getattr(m, "metadata", None) or m.get("metadata", {})
+                                source = md.get("source")
+                                page_no = md.get("page_number") or md.get("page")
+                                if source and page_no:
+                                    groundings.append({"source": source, "page_number": page_no})
+
+                            st.session_state.chat_history.append({"role": "assistant", "content": bot_reply, "groundings": groundings})
                     except Exception as ex:
                         error_msg = f"Sorry, I encountered an error: {str(ex)}"
                         st.session_state.chat_history.append({"role": "assistant", "content": error_msg})

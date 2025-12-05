@@ -104,18 +104,19 @@ def process_user_query(user_query, chat_history=None):
     # Step 1: Embed the query
     query_embedding = embed_query(user_query)
     if query_embedding is None:
-        return "Sorry, I couldn't process your query at the moment. Please try again."
+        return ("Sorry, I couldn't process your query at the moment. Please try again.", [])
     
     # Step 2: Search Pinecone for relevant chunks
     matches = search_pinecone(query_embedding, top_k=5)
     
     if not matches:
-        return "I don't have any information about that in my knowledge base. Please make sure you've uploaded relevant PDF documents."
+        return ("I don't have any information about that in my knowledge base. Please make sure you've uploaded relevant PDF documents.", [])
     
     # Step 3: Build context from matches
     context = build_context_from_matches(matches)
     
     # Step 4: Generate response
     response = generate_response(chat_history, context, user_query)
-    
-    return response
+
+    # Return both the generated response and the raw matches (so callers can show grounding)
+    return (response, matches)
