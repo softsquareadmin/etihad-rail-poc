@@ -425,16 +425,14 @@ elif page == "Chat Assistant":
             try:
                 # Process query
                 with st.spinner("🔍 Searching your documents..."):
-                    bot_reply, matches = process_user_query(user_input.strip(), st.session_state.chat_history[:-1])
-
+                    bot_reply, source = process_user_query(user_input.strip(), st.session_state.chat_history[:-1])
                 # Prepare grounding metadata list from matches
                 groundings = []
-                for m in (matches or []):
-                    md = getattr(m, "metadata", None) or m.get("metadata", {})
-                    source = md.get("source")
-                    page_no = md.get("page_number") or md.get("page")
-                    if source and page_no:
-                        groundings.append({"source": source, "page_number": page_no})
+                if source.get('source') and source.get('page'):
+                    groundings.append({
+                        'source': source.get('source'),
+                        'page_number': source.get('page')
+                    })
 
                 # Add bot response to history with grounding metadata
                 st.session_state.chat_history.append({"role": "assistant", "content": bot_reply, "groundings": groundings})
@@ -463,15 +461,14 @@ elif page == "Chat Assistant":
                     st.session_state.chat_history.append({"role": "user", "content": q})
                     try:
                         with st.spinner("🔍 Searching your documents..."):
-                            bot_reply, matches = process_user_query(q, st.session_state.chat_history[:-1])
+                            bot_reply, source = process_user_query(q, st.session_state.chat_history[:-1])
 
                             groundings = []
-                            for m in (matches or []):
-                                md = getattr(m, "metadata", None) or m.get("metadata", {})
-                                source = md.get("source")
-                                page_no = md.get("page_number") or md.get("page")
-                                if source and page_no:
-                                    groundings.append({"source": source, "page_number": page_no})
+                            if source.get('source') and source.get('page'):
+                                groundings.append({
+                                    'source': source.get('source'),
+                                    'page_number': source.get('page')
+                                })
 
                             st.session_state.chat_history.append({"role": "assistant", "content": bot_reply, "groundings": groundings})
                     except Exception as ex:
