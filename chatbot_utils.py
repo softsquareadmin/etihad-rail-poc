@@ -85,6 +85,11 @@ IMPORTANT: Respond ONLY with valid JSON. No markdown, no explanations, just the 
   "metadata": {"source": "Source Name", "page": X}
 }
 
+Formatting rules for "answer":
+- Format the content with HTML tags where appropriate (e.g., <b>, <i>, <ul>, <li>, <p>, etc.)
+- Use <br> for line breaks
+- Make use of the HTML formatting to enhance readability and structure of the answer
+
 If you use multiple sources, pick the PRIMARY one. Extract the source, page number from the [Source: ..., Page: X, ...] markers in the context."""
 
     messages = [{"role": "system", "content": system_prompt}]
