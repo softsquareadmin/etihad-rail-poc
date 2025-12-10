@@ -3,11 +3,13 @@ from openai import OpenAI, OpenAIError
 from pinecone import Pinecone
 import dotenv
 import json
+import cohere
 
 dotenv.load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone_index_name = os.getenv("PINECONE_INDEX_NAME")
+cohere_api_key = os.getenv("COHERE_API_KEY")
 
 openai_client = OpenAI(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
@@ -63,6 +65,33 @@ def build_context_from_matches(matches):
             context_parts.append(f"[Source: {source}, Page: {page}, Relevance: {score:.2f}]\n{text}\n")
     return "\n---\n".join(context_parts)
 
+def rerank_matches(user_query, matches, top_k=5):
+    """
+    Rerank Pinecone matches using Cohere
+    """
+    if not matches:
+        return []
+    
+    co = cohere.ClientV2(api_key=cohere_api_key)
+    
+    docs = [match.metadata.get("text", "") for match in matches]
+    
+    try:
+        rerank_response = co.rerank(
+            model="rerank-v3.5",
+            query=user_query,
+            documents=docs,
+            top_n=top_k
+        )
+        
+        reranked_indices = [item.index for item in rerank_response.results]
+        reranked_matches = [matches[i] for i in reranked_indices]
+        
+        return reranked_matches
+    except Exception as e:
+        print(f"Cohere rerank error: {e}")
+        return matches[:top_k]
+
 def generate_response(chat_history, context, user_input):
     """
     Generate response using GPT with retrieved context
@@ -90,7 +119,7 @@ Formatting rules for "answer":
 - Use <br> for line breaks
 - Make use of the HTML formatting to enhance readability and structure of the answer
 
-If you use multiple sources, pick the PRIMARY one. Extract the source, page number from the [Source: ..., Page: X, ...] markers in the context."""
+If you use multiple sources, pick the chunk from which more information is used to form the response. Extract the source, page number from the [Source: ..., Page: X, ...] markers in the context."""
 
     messages = [{"role": "system", "content": system_prompt}]
     messages += chat_history
@@ -115,7 +144,7 @@ If you use multiple sources, pick the PRIMARY one. Extract the source, page numb
         print(f"OpenAI error: {e}")
         return "Sorry, there was an error generating a response."
 
-def process_user_query(user_query, chat_history=None):
+def process_user_query(user_query, chat_history=None, rerank=False):
     """
     Main function to process user queries with RAG pipeline
     """
@@ -128,10 +157,15 @@ def process_user_query(user_query, chat_history=None):
         return ("Sorry, I couldn't process your query at the moment. Please try again.", [])
     
     # Step 2: Search Pinecone for relevant chunks
-    matches = search_pinecone(query_embedding, top_k=5)
+    matches = search_pinecone(query_embedding, top_k=5 if not rerank else 15)
     
     if not matches:
         return ("I don't have any information about that in my knowledge base. Please make sure you've uploaded relevant PDF documents.", [])
+    
+    # Optional Step: Rerank matches using Cohere
+    if rerank:
+        matches = rerank_matches(user_query, matches, top_k=5)
+        print("Reranked matches ::::::", matches)
     
     # Step 3: Build context from matches
     context = build_context_from_matches(matches)

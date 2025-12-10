@@ -241,6 +241,12 @@ with st.sidebar:
     else:
         default_page = "Chat Assistant"
     
+    on = st.toggle("Enable Reranking", value=False, help="Toggle to enable or disable reranking of search results")
+    if on:
+        st.session_state.rerank = True
+    else:
+        st.session_state.rerank = False
+    
     page = st.radio(
         "Choose Action:",
         options=["Chat Assistant", "Upload PDFs", "Database Management"],
@@ -425,7 +431,7 @@ elif page == "Chat Assistant":
             try:
                 # Process query
                 with st.spinner("🔍 Searching your documents..."):
-                    bot_reply, source = process_user_query(user_input.strip(), st.session_state.chat_history[:-1])
+                    bot_reply, source = process_user_query(user_input.strip(), st.session_state.chat_history[:-1], rerank=st.session_state.get("rerank", False))
                 # Prepare grounding metadata list from matches
                 groundings = []
                 if source.get('source') and source.get('page'):
@@ -461,7 +467,7 @@ elif page == "Chat Assistant":
                     st.session_state.chat_history.append({"role": "user", "content": q})
                     try:
                         with st.spinner("🔍 Searching your documents..."):
-                            bot_reply, source = process_user_query(q, st.session_state.chat_history[:-1])
+                            bot_reply, source = process_user_query(q, st.session_state.chat_history[:-1], rerank=st.session_state.get("rerank", False))
 
                             groundings = []
                             if source.get('source') and source.get('page'):
