@@ -6,3 +6,4 @@ google-generativeai
 pymupdf
 pillow
 cohere
+openpyxl

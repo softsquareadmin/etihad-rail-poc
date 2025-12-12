@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import dotenv
+import pandas as pd
 from pdf_processor import process_pdf_and_upload, render_pdf_page_to_png_bytes
 from chatbot_utils import process_user_query
 from pinecone import Pinecone
@@ -26,7 +27,7 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
 
-st.set_page_config(page_title="PDF Knowledge Assistant", layout="centered")
+st.set_page_config(page_title="Etihad Rail", layout="centered", page_icon="logo.png")
 
 # ---- Enhanced CSS with better mobile support ----
 st.markdown("""
@@ -66,10 +67,27 @@ st.markdown("""
         color: var(--text-primary);
     }
     
-    .main-content {
-        padding-top: 80px;
+    .block-container {
+        max-width: 100% !important;
+        padding-left: 30px;
+        padding-right: 30px;
+        padding-top: 30px;
+        padding-bottom: 100px;
     }
     
+    [data-testid="stLayoutWrapper"]:nth-child(3) {
+        height: 300px;
+        overflow: overlay; 
+        color: rgb(26, 26, 26);
+    }
+            
+    div[data-testid="stSidebarUserContent"] {
+        padding-bottom: 60px;
+    }
+    
+    .custom-chat-input-wrapper + [data-testid="stElementContainer"] {
+        padding: 50px;
+    }
     .user-message {
         display: flex;
         justify-content: flex-end;
@@ -190,6 +208,139 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+if "verification_chat_open" not in st.session_state:
+    st.session_state.verification_chat_open = False
+
+def render_chat_assistant(instance="default"):
+
+    # Namespaced keys (unique per instance)
+    chat_key = f"chat_history_{instance}"
+    faq_key = f"faq_open_{instance}"
+    rerank_key = f"rerank_{instance}"
+
+    # Ensure defaults exist
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = []  # list of {role, content, groundings?}
+
+    if faq_key not in st.session_state:
+        st.session_state[faq_key] = False
+
+    # If you have a rerank toggle elsewhere, keep it per-instance too
+    if rerank_key not in st.session_state:
+        st.session_state[rerank_key] = False
+
+    chat_history = st.session_state[chat_key]
+
+    if total_vectors == 0:
+        st.warning("⚠️ No documents found. Please upload some PDF documents first.")
+        if st.button("📤 Upload PDFs", key=f"upload_btn_{instance}", type="primary"):
+            st.session_state.page = "Upload PDFs"  # if you use this global page state
+            st.rerun()
+
+    else:
+        # Chat interface container
+        chat_container = st.container()
+
+        with chat_container:
+            for i, msg in enumerate(chat_history):
+                css_class = "user-message" if msg["role"] == "user" else "bot-message"
+                bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
+
+                bubble_html = f"""
+                    <div class="{css_class}">
+                        <div class="chat-bubble {bubble_class}">
+                            {msg["content"]}
+                        </div>
+                    </div>
+                """
+                st.markdown(bubble_html, unsafe_allow_html=True)
+
+                # Show source button per-instance and per-message (unique key)
+                if msg["role"] == "assistant" and msg.get("groundings"):
+                    grounding = msg["groundings"][0]
+                    src = grounding.get("source")
+                    page_no = grounding.get("page_number")
+
+                    if src and page_no:
+
+                        if st.button("📄 View Source", key=f"view_source_{instance}_{i}"):
+                            png_bytes = render_pdf_page_to_png_bytes(PDF_URL, page_number=int(page_no), zoom=2.0)
+                            show_source_dialog(png_bytes)
+
+        # Chat input - keep the same UI but append to namespaced history
+        user_input = st.chat_input("Ask about your documents...")
+
+        if user_input:
+            # Add user message to the namespaced history
+            st.session_state[chat_key].append({"role": "user", "content": user_input.strip()})
+
+            try:
+                # Process query
+                with st.spinner("🔍 Searching your documents..."):
+                    bot_reply, source = process_user_query(
+                        user_input.strip(),
+                        st.session_state[chat_key][:-1],  # previous messages for context
+                        rerank=st.session_state.get(rerank_key, False)
+                    )
+
+                # Prepare grounding metadata list from matches
+                groundings = []
+                if source.get('source') and source.get('page'):
+                    groundings.append({
+                        'source': source.get('source'),
+                        'page_number': source.get('page')
+                    })
+
+                # Add bot response to namespaced history
+                st.session_state[chat_key].append({"role": "assistant", "content": bot_reply, "groundings": groundings})
+
+            except Exception as ex:
+                error_msg = f"Sorry, I encountered an error: {str(ex)}"
+                st.session_state[chat_key].append({"role": "assistant", "content": error_msg})
+                st.error(f"Error processing query: {ex}")
+
+            st.rerun()
+
+        # Frequently Asked Questions / Suggestions (expander - uses instance-specific state)
+        with st.expander("💡 Frequently Asked Questions / Suggestions", expanded=st.session_state[faq_key]):
+            suggested_questions = [
+                "What are the key safety procedures described in the documents?",
+                "Summarize maintenance schedule guidelines.",
+                "What are the contact details for emergency?",
+                "Available temperature ranges?"
+            ]
+
+            cols = st.columns(3)
+            for i, q in enumerate(suggested_questions):
+                col = cols[i % len(cols)]
+                if col.button(q, key=f"suggestion_{instance}_{i}"):
+                    # When a suggestion is clicked, add as user input and process it
+                    st.session_state[chat_key].append({"role": "user", "content": q})
+                    try:
+                        with st.spinner("🔍 Searching your documents..."):
+                            bot_reply, source = process_user_query(
+                                q,
+                                st.session_state[chat_key][:-1],
+                                rerank=st.session_state.get(rerank_key, False)
+                            )
+
+                            groundings = []
+                            if source.get('source') and source.get('page'):
+                                groundings.append({
+                                    'source': source.get('source'),
+                                    'page_number': source.get('page')
+                                })
+
+                            st.session_state[chat_key].append({"role": "assistant", "content": bot_reply, "groundings": groundings})
+                    except Exception as ex:
+                        error_msg = f"Sorry, I encountered an error: {str(ex)}"
+                        st.session_state[chat_key].append({"role": "assistant", "content": error_msg})
+                        st.error(f"Error processing suggestion: {ex}")
+
+                    # Auto-close the FAQ and rerun to show updated chat
+                    st.session_state[faq_key] = False
+                    st.rerun()
+
 @st.dialog("Source page", width="medium")
 def show_source_dialog(png_bytes: bytes):
     st.image(png_bytes)
@@ -239,7 +390,7 @@ with st.sidebar:
     if total_vectors == 0:
         default_page = "Upload PDFs"
     else:
-        default_page = "Chat Assistant"
+        default_page = "Category Selection"
     
     on = st.toggle("Enable Reranking", value=False, help="Toggle to enable or disable reranking of search results")
     if on:
@@ -249,8 +400,9 @@ with st.sidebar:
     
     page = st.radio(
         "Choose Action:",
-        options=["Chat Assistant", "Upload PDFs", "Database Management"],
-        index=["Chat Assistant", "Upload PDFs", "Database Management"].index(default_page)
+        options=["Category Selection", "Verification", "Chat Assistant", "Upload PDFs", "Database Management"],
+        index=["Category Selection", "Verification", "Chat Assistant", "Upload PDFs", "Database Management"].index(default_page),
+        key = "page"
     )
 
 # ---- Upload PDFs Page ----
@@ -385,107 +537,7 @@ if page == "Upload PDFs":
 
 # ---- Chat Assistant Page ----
 elif page == "Chat Assistant":
-    if total_vectors == 0:
-        st.warning("⚠️ No documents found. Please upload some PDF documents first.")
-        if st.button("📤 Upload PDFs", type="primary"):
-            st.session_state.page = "Upload PDFs"
-            st.rerun()
-    else:
-        # Chat interface
-        chat_container = st.container()
-
-        with chat_container:
-            for i, msg in enumerate(st.session_state.chat_history):
-                css_class = "user-message" if msg["role"] == "user" else "bot-message"
-                bubble_class = "user-bubble" if msg["role"] == "user" else "bot-bubble"
-                
-                bubble_html = f"""
-                    <div class="{css_class}">
-                        <div class="chat-bubble {bubble_class}">
-                            {msg["content"]}
-                        </div>
-                    </div>
-                """
-                st.markdown(bubble_html, unsafe_allow_html=True)
-                
-                if msg["role"] == "assistant" and msg.get("groundings"):
-                    grounding = msg["groundings"][0]
-                    src = grounding.get("source")
-                    page_no = grounding.get("page_number")
-                    
-                    if src and page_no:
-                        api_base = os.getenv("IMAGE_API_BASE", "http://localhost:8000")
-                        img_url = f"{api_base}/generate_image?page={int(page_no)}&zoom=2"
-                        
-                        if st.button("📄 View Source", key=f"view_source_{i}"):
-                            png_bytes = render_pdf_page_to_png_bytes(PDF_URL, page_number=int(page_no), zoom=2.0)
-                            show_source_dialog(png_bytes)
-
-        # Chat input - FULL WIDTH
-        user_input = st.chat_input("Ask about your documents...")
-
-        if user_input:
-            # Add user message to history
-            st.session_state.chat_history.append({"role": "user", "content": user_input.strip()})
-
-            try:
-                # Process query
-                with st.spinner("🔍 Searching your documents..."):
-                    bot_reply, source = process_user_query(user_input.strip(), st.session_state.chat_history[:-1], rerank=st.session_state.get("rerank", False))
-                # Prepare grounding metadata list from matches
-                groundings = []
-                if source.get('source') and source.get('page'):
-                    groundings.append({
-                        'source': source.get('source'),
-                        'page_number': source.get('page')
-                    })
-
-                # Add bot response to history with grounding metadata
-                st.session_state.chat_history.append({"role": "assistant", "content": bot_reply, "groundings": groundings})
-
-            except Exception as ex:
-                error_msg = f"Sorry, I encountered an error: {str(ex)}"
-                st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
-                st.error(f"Error processing query: {ex}")
-
-            st.rerun()
-
-        # Frequently Asked Questions / Suggestions (expander - initially closed)
-        with st.expander("💡 Frequently Asked Questions / Suggestions", expanded=st.session_state.faq_open):
-            suggested_questions = [
-                "What are the key safety procedures described in the documents?",
-                "Summarize maintenance schedule guidelines.",
-                "What are the contact details for emergency?",
-                "Available temperature ranges?"
-            ]
-
-            cols = st.columns(3)
-            for i, q in enumerate(suggested_questions):
-                col = cols[i % len(cols)]
-                if col.button(q, key=f"suggestion_{i}"):
-                    # When a suggestion is clicked, add as user input and process it
-                    st.session_state.chat_history.append({"role": "user", "content": q})
-                    try:
-                        with st.spinner("🔍 Searching your documents..."):
-                            bot_reply, source = process_user_query(q, st.session_state.chat_history[:-1], rerank=st.session_state.get("rerank", False))
-
-                            groundings = []
-                            if source.get('source') and source.get('page'):
-                                groundings.append({
-                                    'source': source.get('source'),
-                                    'page_number': source.get('page')
-                                })
-
-                            st.session_state.chat_history.append({"role": "assistant", "content": bot_reply, "groundings": groundings})
-                    except Exception as ex:
-                        error_msg = f"Sorry, I encountered an error: {str(ex)}"
-                        st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
-                        st.error(f"Error processing suggestion: {ex}")
-
-                    # Auto-close the FAQ and rerun to show updated chat
-                    st.session_state.faq_open = False
-                    st.rerun()
-
+    render_chat_assistant(instance="main")
 
 # ---- Database Management Page ----
 elif page == "Database Management":
@@ -545,5 +597,82 @@ elif page == "Database Management":
                     
                 except Exception as e:
                     st.error(f"Error resetting database: {e}")
+elif page == "Category Selection":
+    st.header("📂 Category Selection")
 
+    df = pd.read_excel('Model_Series.xlsx')
+
+    df['Model / Series'] = df['Model / Series'].str.split('; ')
+    master_df = df.explode('Model / Series').reset_index(drop=True)
+    master_df['Model / Series'] = master_df['Model / Series'].str.strip()
+
+    # A. Picklist 1 (Category)
+    category_options = master_df['Category'].unique()
+    selected_category = st.selectbox(
+        'Category',
+        category_options
+    )
+
+    # Filter DF based on Category selection
+    df_filtered_by_category = master_df[master_df['Category'] == selected_category]
+
+
+    # B. Picklist 2 (Type)
+    type_options = df_filtered_by_category['Type'].unique()
+    selected_type = st.selectbox(
+        'Type',
+        type_options
+    )
+
+    # Filter DF based on Model selection (and Category selection is still active)
+    df_filtered_by_type = df_filtered_by_category[df_filtered_by_category['Type'] == selected_type]
+
+
+    # C. Picklist 3 (Brand)
+    brand_options = df_filtered_by_type['Brand'].unique()
+    selected_brand = st.selectbox(
+        'Brand',
+        brand_options
+    )
+
+    # Filter DF based on Brand selection (and previous selections are still active)
+    df_filtered_by_brand = df_filtered_by_type[df_filtered_by_type['Brand'] == selected_brand]
+
+    # D. Picklist 4 (Model / Series)
+    model_series_options = df_filtered_by_brand['Model / Series'].unique()
+    selected_model_series = st.selectbox(
+        'Model / Series',
+        model_series_options
+    )
+
+    def go_to_verification():
+        st.session_state.page = "Verification"
+
+    st.button("Verify", on_click= go_to_verification)
+
+#---- Verification Page ----
+elif page == "Verification":
+
+    st.header("✅ Verification Page")
+    col_main, col_chat = st.columns([2, 1])
+
+    with col_main:
+        st.checkbox("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.")
+        st.checkbox("Check if the ON lamp on the wired controller is flashing and record the error code.")
+        st.checkbox("Check if the lamp near the wireless receiver on the indoor unit is flashing?.")
+        st.checkbox("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.")
+        st.checkbox("Check if any error code is shown on the remote display.")
+        st.checkbox("Check that the timer settings are set correctly and only one timer type is in use.")
+        st.checkbox("Check that the air filters are clean, in good condition, and fitted properly.")
+        st.checkbox("Check if any alarm or flashing light is present and record the details.")
+
+    with col_chat:
+        if st.session_state.verification_chat_open:
+            render_chat_assistant(instance="side")
+    
+    bottom_bar = st.container(horizontal=True, horizontal_alignment="right")
+    with bottom_bar:
+        if st.button("Ask AI", type="primary"):
+            st.session_state.verification_chat_open = True
+            st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
