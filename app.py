@@ -5,6 +5,7 @@ import pandas as pd
 from pdf_processor import process_pdf_and_upload, render_pdf_page_to_png_bytes
 from chatbot_utils import process_user_query
 from pinecone import Pinecone
+import base64
 
 def pinecone_index_is_empty(pinecone_api_key, pinecone_index_name):
     pc = Pinecone(api_key=pinecone_api_key)
@@ -27,30 +28,35 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
 
-st.set_page_config(page_title="Etihad Rail", layout="centered", page_icon="logo.png")
+def img_to_base64(path):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+st.set_page_config(page_title="Etihad Rail", layout="centered", page_icon="etihad_logo.png")
+bot_icon = img_to_base64("etihad_logo.png")
 
 # ---- Enhanced CSS with better mobile support ----
-st.markdown("""
+st.markdown(f"""
     <style>
     /* Use CSS variables that adapt to Streamlit's theme */
-    :root {
+    :root {{
         --bg-primary: #f5f5f7;
         --bg-secondary: #ffffff;
         --text-primary: #1a1a1a;
         --border-color: #e0e0e0;
         --shadow: rgba(0,0,0,0.1);
-    }
+    }}
     
     /* Dark mode overrides */
-    [data-testid="stAppViewContainer"][data-theme="dark"] {
+    [data-testid="stAppViewContainer"][data-theme="dark"] {{
         --bg-primary: #0e1117;
         --bg-secondary: #262730;
         --text-primary: #fafafa;
         --border-color: #4a4a4a;
         --shadow: rgba(0,0,0,0.3);
-    }
+    }}
     
-    .fixed-title {
+    .fixed-title {{
         position: fixed;
         top: 0;
         left: 0;
@@ -65,44 +71,72 @@ st.markdown("""
         font-weight: bold;
         box-shadow: 0 2px 10px var(--shadow);
         color: var(--text-primary);
-    }
+    }}
     
-    .block-container {
+    .block-container {{
         max-width: 100% !important;
         padding-left: 30px;
         padding-right: 30px;
         padding-top: 30px;
-        padding-bottom: 100px;
-    }
+        padding-bottom: 30px;
+    }}
     
-    [data-testid="stLayoutWrapper"]:nth-child(3) {
-        height: 300px;
-        overflow: overlay; 
-        color: rgb(26, 26, 26);
-    }
+    [data-testid="stHorizontalBlock"] .stColumn:nth-child(2) [data-testid="stVerticalBlock"] {{
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        height: calc(100vh - 140px);
+        min-height: 320px;
+        max-height: 500px;
+        box-sizing: border-box;
+    }}  
+              
+    [data-testid="stHorizontalBlock"] .stColumn:nth-child(2) [data-testid="stLayoutWrapper"]:nth-child(1) {{
+        order: 1;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }}
             
-    div[data-testid="stSidebarUserContent"] {
-        padding-bottom: 60px;
-    }
+    [data-testid="stHorizontalBlock"] .stColumn:nth-child(2) [data-testid="stLayoutWrapper"]:has([data-testid="stExpander"]) {{
+        order: 2;
+        flex: none;
+        margin-top: 6px;
+        max-height: 200px;
+        overflow-y: auto;
+    }}
+            
+    [data-testid="stHorizontalBlock"] .stColumn:nth-child(2) [data-testid="stElementContainer"]:has([data-testid="stChatInput"]) {{
+        order: 3;
+        position: relative;
+        bottom: 0;
+    }}
+
+    [data-testid="stHorizontalBlock"] .stColumn:nth-child(2) [data-testid="stVerticalBlock"]:has([data-testid="stLayoutWrapper"]) {{
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        border-radius: 15px;
+        padding: 10px;
+    }}
     
-    .custom-chat-input-wrapper + [data-testid="stElementContainer"] {
+    .custom-chat-input-wrapper + [data-testid="stElementContainer"] {{
         padding: 50px;
-    }
-    .user-message {
+    }}
+    .user-message {{
         display: flex;
         justify-content: flex-end;
         text-align: right;
         margin-bottom: 12px;
-    }
+    }}
     
-    .bot-message {
+    .bot-message {{
         display: flex;
         justify-content: flex-start;
         text-align: left;
         margin-bottom: 12px;
-    }
+    }}
     
-    .chat-bubble {
+    .chat-bubble {{
         max-width: 75%;
         padding: 14px 18px;
         border-radius: 18px;
@@ -111,65 +145,65 @@ st.markdown("""
         font-size: 1rem;
         line-height: 1.4;
         box-shadow: 0 2px 10px var(--shadow);
-    }
+    }}
     
-    .user-bubble {
+    .user-bubble {{
         background: linear-gradient(135deg, #007aff, #0051d5);
         color: white;
         border-bottom-right-radius: 6px;
-    }
+    }}
     
-    .bot-bubble {
+    .bot-bubble {{
         background-color: var(--bg-secondary);
         color: var(--text-primary);
         border: 1px solid var(--border-color);
         border-bottom-left-radius: 6px;
-    }
+    }}
     
-    .stats-container {
+    .stats-container {{
         background: var(--bg-secondary);
         padding: 1rem;
         border-radius: 10px;
         border: 1px solid var(--border-color);
         margin-bottom: 1rem;
         color: var(--text-primary);
-    }
+    }}
     
-    .upload-progress {
+    .upload-progress {{
         background: var(--bg-secondary);
         border: 1px solid #2196f3;
         border-radius: 8px;
         padding: 12px;
         margin: 10px 0;
         color: var(--text-primary);
-    }
+    }}
     
-    .success-message {
+    .success-message {{
         background: var(--bg-secondary);
         border: 1px solid #4caf50;
         border-radius: 8px;
         padding: 12px;
         margin: 10px 0;
         color: #4caf50;
-    }
+    }}
     
-    .warning-message {
+    .warning-message {{
         background: var(--bg-secondary);
         border: 1px solid #ff9800;
         border-radius: 8px;
         padding: 12px;
         margin: 10px 0;
         color: #ff9800;
-    }
+    }}
     
     /* Fix Streamlit's default dark mode text colors */
     [data-theme="dark"] .stats-container h4,
-    [data-theme="dark"] .stats-container p {
+    [data-theme="dark"] .stats-container p {{
         color: var(--text-primary) !important;
-    }
+    }}
 
     /* Fixed FAQ Container styling */
-    .faq-container {
+    .faq-container {{
         position: sticky;
         bottom: 0;
         background: var(--bg-secondary);
@@ -178,9 +212,9 @@ st.markdown("""
         z-index: 100;
         box-shadow: 0 -2px 10px var(--shadow);
         margin-top: 10px;
-    }
+    }}
 
-    .faq-button {
+    .faq-button {{
         display: inline-block;
         padding: 10px 16px;
         background: linear-gradient(135deg, #007aff, #0051d5);
@@ -191,20 +225,61 @@ st.markdown("""
         font-weight: 600;
         font-size: 0.95rem;
         transition: all 0.3s ease;
-    }
+    }}
 
-    .faq-button:hover {
+    .faq-button:hover {{
         background: linear-gradient(135deg, #0051d5, #003d99);
         box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
-    }
+    }}
 
-    .faq-content {
+    .faq-content {{
         margin-top: 12px;
         padding: 12px;
         background: var(--bg-primary);
         border-radius: 8px;
         border-left: 4px solid #007aff;
-    }
+    }}
+            
+    /* Base layout for messages */
+    .user-message,
+    .bot-message {{
+        display: flex;
+        align-items: center;
+    }}
+
+    /* User messages → right aligned */
+    .user-message {{
+        justify-content: flex-end;
+    }}
+
+    /* Bot messages → left aligned */
+    .bot-message {{
+        justify-content: flex-start;
+    }}
+
+    /* User icon */
+    .user-message::before {{
+        content: "";
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-image: url("https://cdn-icons-png.flaticon.com/512/847/847969.png");
+        background-size: cover;
+        background-position: center;
+        flex-shrink: 0;
+    }}
+
+    /* Bot icon */
+    .bot-message::before {{
+        content: "";
+        width: 42px;
+        height: 32px;
+        background-image: url("data:image/png;base64,{bot_icon}");
+        background-size: cover;
+        background-position: center;
+        flex-shrink: 0;
+    }}
+
     </style>
 """, unsafe_allow_html=True)
 
@@ -310,10 +385,9 @@ def render_chat_assistant(instance="default"):
                 "Available temperature ranges?"
             ]
 
-            cols = st.columns(3)
+            # Display questions in a single column layout
             for i, q in enumerate(suggested_questions):
-                col = cols[i % len(cols)]
-                if col.button(q, key=f"suggestion_{instance}_{i}"):
+                if st.button(q, key=f"suggestion_{instance}_{i}", use_container_width=True):
                     # When a suggestion is clicked, add as user input and process it
                     st.session_state[chat_key].append({"role": "user", "content": q})
                     try:
@@ -547,12 +621,6 @@ elif page == "Database Management":
     try:
         stats = get_index_stats(pinecone_api_key, pinecone_index_name)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Total Chunks", stats.get("total_vector_count", 0))
-        with col2:
-            st.metric("Index Dimension", stats.get("dimension", "N/A"))
-        
         # Show recently processed files
         if st.session_state.processed_files:
             st.subheader("📋 Recently Processed Files")
@@ -647,13 +715,15 @@ elif page == "Category Selection":
 
     def go_to_verification():
         st.session_state.page = "Verification"
+        st.session_state.brand = selected_brand
+        st.session_state.model_series = selected_model_series
 
-    st.button("Verify", on_click= go_to_verification)
+    st.button("Confirm", on_click= go_to_verification)
 
 #---- Verification Page ----
 elif page == "Verification":
 
-    st.header("✅ Verification Page")
+    st.header(f"✅ Checklist - {st.session_state.get('brand', '')} {st.session_state.get('model_series', '')}")
     col_main, col_chat = st.columns([2, 1])
 
     with col_main:
@@ -672,7 +742,12 @@ elif page == "Verification":
     
     bottom_bar = st.container(horizontal=True, horizontal_alignment="right")
     with bottom_bar:
-        if st.button("Ask AI", type="primary"):
-            st.session_state.verification_chat_open = True
-            st.rerun()
+        if not st.session_state.verification_chat_open:
+            if st.button("Ask Agent", type="primary"):
+                st.session_state.verification_chat_open = True
+                st.rerun()
+        else:
+            if st.button("Close Agent", type="secondary"):
+                st.session_state.verification_chat_open = False
+                st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
