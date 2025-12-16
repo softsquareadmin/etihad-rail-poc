@@ -98,7 +98,9 @@ st.markdown(f"""
         border-radius: 15px;
         padding: 10px;
     }}
-    
+    [data-testid="stHorizontalBlock"] > .stColumn:nth-child(1) [data-testid="stVerticalBlock"] [data-testid="stLayoutWrapper"] {{
+        height: 35px;
+    }}
     .custom-chat-input-wrapper + [data-testid="stElementContainer"] {{
         padding: 50px;
     }}
@@ -275,6 +277,8 @@ st.markdown(f"""
 
 if "verification_chat_open" not in st.session_state:
     st.session_state.verification_chat_open = False
+if "selected_checklist" not in st.session_state:
+    st.session_state.selected_checklist = None
 
 def render_chat_assistant(instance="default"):
 
@@ -332,8 +336,57 @@ def render_chat_assistant(instance="default"):
                             png_bytes = render_pdf_page_to_png_bytes(PDF_URL, page_number=int(page_no), zoom=2.0)
                             show_source_dialog(png_bytes)
 
+            # Auto-scroll anchor at the end of messages
+            if chat_history:
+                # Create an anchor element at the bottom of chat
+                st.markdown(f'<div id="chat-bottom-anchor-{instance}"></div>', unsafe_allow_html=True)
+                
+                # Use st.components.v1.html to inject JavaScript that actually executes
+                import streamlit.components.v1 as components
+                components.html(f"""
+                    <script>
+                        // Wait for DOM to be ready then scroll within container only
+                        setTimeout(function() {{
+                            // Find the last bot message
+                            const botMessages = parent.document.querySelectorAll('.bot-message');
+                            if (botMessages.length > 0) {{
+                                const lastBotMessage = botMessages[botMessages.length - 1];
+                                
+                                // Find the scrollable parent container (not the page itself)
+                                let scrollContainer = lastBotMessage.parentElement;
+                                while (scrollContainer) {{
+                                    const style = parent.window.getComputedStyle(scrollContainer);
+                                    const overflowY = style.getPropertyValue('overflow-y');
+                                    if (overflowY === 'auto' || overflowY === 'scroll') {{
+                                        // Calculate the position to scroll the last bot message to the top
+                                        const containerRect = scrollContainer.getBoundingClientRect();
+                                        const messageRect = lastBotMessage.getBoundingClientRect();
+                                        const scrollOffset = messageRect.top - containerRect.top + scrollContainer.scrollTop;
+                                        
+                                        // Scroll to position the last bot message at the top with some padding
+                                        scrollContainer.scrollTo({{
+                                            top: scrollOffset - 10,
+                                            behavior: 'smooth'
+                                        }});
+                                        break;
+                                    }}
+                                    // Stop before reaching the main page scroll
+                                    if (scrollContainer.tagName === 'MAIN' || scrollContainer.tagName === 'BODY') {{
+                                        break;
+                                    }}
+                                    scrollContainer = scrollContainer.parentElement;
+                                }}
+                            }}
+                        }}, 150);
+                    </script>
+                """, height=0)
+
         # Chat input - keep the same UI but append to namespaced history
-        user_input = st.chat_input("Ask about your documents...")
+        if instance == "side" and st.session_state.verification_chat_open and st.session_state.get("selected_checklist", None):
+            user_input = st.session_state["selected_checklist"]
+            st.session_state["selected_checklist"] = None
+        else:
+            user_input = st.chat_input("Ask about your documents...")
 
         if user_input:
             # Add user message to the namespaced history
@@ -717,14 +770,72 @@ elif page == "Verification":
     col_main, col_chat = st.columns([2, 1])
 
     with col_main:
-        st.checkbox("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.")
-        st.checkbox("Check if the ON lamp on the wired controller is flashing and record the error code.")
-        st.checkbox("Check if the lamp near the wireless receiver on the indoor unit is flashing?.")
-        st.checkbox("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.")
-        st.checkbox("Check if any error code is shown on the remote display.")
-        st.checkbox("Check that the timer settings are set correctly and only one timer type is in use.")
-        st.checkbox("Check that the air filters are clean, in good condition, and fitted properly.")
-        st.checkbox("Check if any alarm or flashing light is present and record the details.")
+        # st.checkbox("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.")
+        # st.checkbox("Check if the ON lamp on the wired controller is flashing and record the error code.")
+        # st.checkbox("Check if the lamp near the wireless receiver on the indoor unit is flashing?.")
+        # st.checkbox("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.")
+        # st.checkbox("Check if any error code is shown on the remote display.")
+        # st.checkbox("Check that the timer settings are set correctly and only one timer type is in use.")
+        # st.checkbox("Check that the air filters are clean, in good condition, and fitted properly.")
+        # st.checkbox("Check if any alarm or flashing light is present and record the details.")
+        
+        def on_arrow_click(text: str):
+            st.session_state.selected_checklist = text
+
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.",key="chk_temp_modes")
+        with c2:
+            st.button("›", key="btn_temp_modes", on_click=on_arrow_click, args=("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.",))
+
+        # 2
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check if the ON lamp on the wired controller is flashing and record the error code.",key="chk_on_lamp")
+        with c2:
+            st.button("›", key="btn_on_lamp", on_click=on_arrow_click, args=("Check if the ON lamp on the wired controller is flashing and record the error code.",))
+
+        # 3
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check if the lamp near the wireless receiver on the indoor unit is flashing?.",key="chk_wireless_lamp")
+        with c2:
+            st.button("›", key="btn_wireless_lamp", on_click=on_arrow_click, args=("Check if the lamp near the wireless receiver on the indoor unit is flashing?.",))
+
+        # 4
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.",key="chk_mode")
+        with c2:
+            st.button("›", key="btn_mode", on_click=on_arrow_click, args=("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.",))
+
+        # 5
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check if any error code is shown on the remote display.",key="chk_remote_error")
+        with c2:
+            st.button("›", key="btn_remote_error", on_click=on_arrow_click, args=("Check if any error code is shown on the remote display.",))
+
+        # 6
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check that the timer settings are set correctly and only one timer type is in use.",key="chk_timer")
+        with c2:
+            st.button("›", key="btn_timer", on_click=on_arrow_click, args=("Check that the timer settings are set correctly and only one timer type is in use.",))
+
+        # 7
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check that the air filters are clean, in good condition, and fitted properly.",key="chk_filters")
+        with c2:
+            st.button("›", key="btn_filters", on_click=on_arrow_click, args=("Check that the air filters are clean, in good condition, and fitted properly.",))
+
+        # 8
+        c1, c2 = st.columns([12, 1])
+        with c1:
+            st.checkbox("Check if any alarm or flashing light is present and record the details.",key="chk_alarm")
+        with c2:
+            st.button("›", key="btn_alarm", on_click=on_arrow_click, args=("Check if any alarm or flashing light is present and record the details.",))
 
     with col_chat:
         if st.session_state.verification_chat_open:
