@@ -485,15 +485,7 @@ with st.sidebar:
         stats = get_index_stats(pinecone_api_key, pinecone_index_name)
         total_vectors = stats.get("total_vector_count", 0)
         
-        if total_vectors > 0:
-            st.markdown(f"""
-            <div class="stats-container">
-                <h4>📊 Database Status</h4>
-                <p><strong>Status:</strong> Ready for queries</p>
-                <p><strong>Documents:</strong> {total_vectors} chunks</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
+        if total_vectors == 0:
             st.markdown("""
             <div class="warning-message">
                 <h4>⚠️ No Documents</h4>
@@ -517,8 +509,8 @@ with st.sidebar:
     
     page = st.radio(
         "Choose Action:",
-        options=["Category Selection", "Verification", "Chat Assistant", "Upload PDFs", "Database Management"],
-        index=["Category Selection", "Verification", "Chat Assistant", "Upload PDFs", "Database Management"].index(default_page),
+        options=["Category Selection", "Checklist", "Chat Assistant", "Upload PDFs", "Database Management"],
+        index=["Category Selection", "Checklist", "Chat Assistant", "Upload PDFs", "Database Management"].index(default_page),
         key = "page"
     )
 
@@ -756,15 +748,15 @@ elif page == "Category Selection":
         model_series_options
     )
 
-    def go_to_verification():
-        st.session_state.page = "Verification"
+    def go_to_checklist():
+        st.session_state.page = "Checklist"
         st.session_state.brand = selected_brand
         st.session_state.model_series = selected_model_series
 
-    st.button("Confirm", on_click= go_to_verification)
+    st.button("Confirm", on_click=go_to_checklist)
 
-#---- Verification Page ----
-elif page == "Verification":
+#---- Checklist Page ----
+elif page == "Checklist":
 
     st.header(f"✅ Checklist - {st.session_state.get('brand', '')} {st.session_state.get('model_series', '')}")
     col_main, col_chat = st.columns([2, 1])
