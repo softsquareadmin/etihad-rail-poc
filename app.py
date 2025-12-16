@@ -40,39 +40,19 @@ st.markdown(f"""
     <style>
     /* Use CSS variables that adapt to Streamlit's theme */
     :root {{
-        --bg-primary: #f5f5f7;
-        --bg-secondary: #ffffff;
-        --text-primary: #1a1a1a;
         --border-color: #e0e0e0;
         --shadow: rgba(0,0,0,0.1);
     }}
-    
-    /* Dark mode overrides */
-    [data-testid="stAppViewContainer"][data-theme="dark"] {{
-        --bg-primary: #0e1117;
-        --bg-secondary: #262730;
-        --text-primary: #fafafa;
-        --border-color: #4a4a4a;
-        --shadow: rgba(0,0,0,0.3);
-    }}
-    
     .fixed-title {{
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
-        background: var(--bg-secondary);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid var(--border-color);
-        padding: 1rem;
+        border-bottom: 4px solid var(--border-color);
+        height: 64px;
         z-index: 999;
-        text-align: center;
-        font-size: 1.5rem;
-        font-weight: bold;
-        box-shadow: 0 2px 10px var(--shadow);
-        color: var(--text-primary);
     }}
-    
+
     .block-container {{
         max-width: 100% !important;
         padding-left: 30px;
@@ -127,6 +107,16 @@ st.markdown(f"""
         justify-content: flex-end;
         text-align: right;
         margin-bottom: 12px;
+    }}
+
+    header[data-testid="stHeader"]::after {{
+        content: "Etihad Rail";
+        font-size: 2.5rem;
+        font-weight: 650;
+        color: var(--text-color);
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
     }}
     
     .bot-message {{
@@ -420,7 +410,7 @@ def show_source_dialog(png_bytes: bytes):
     st.image(png_bytes)
 
 # ---- Fixed Title ----
-st.markdown('<div class="fixed-title">PDF Knowledge Assistant</div>', unsafe_allow_html=True)
+st.markdown('<div class="fixed-title"></div>', unsafe_allow_html=True)
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
 # ---- Initialize Session State ----
