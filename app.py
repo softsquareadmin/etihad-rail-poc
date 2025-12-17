@@ -28,12 +28,25 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
 
+if "header_name" not in st.session_state:
+    st.session_state.header_name = "Mumbai Rail"
+
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-st.set_page_config(page_title="Etihad Rail", layout="centered", page_icon="etihad_logo.png")
-bot_icon = img_to_base64("etihad_logo.png")
+st.set_page_config(page_title=st.session_state.header_name, layout="centered", page_icon="etihad_logo.png" if st.session_state.header_name == "Etihad Rail" else "Indian_Railways_logo.png")
+if st.session_state.header_name == "Etihad Rail":    
+    bot_icon = img_to_base64("etihad_logo.png")
+else:
+    bot_icon = img_to_base64("bot.png")
+
+def toggle_header():
+    if st.session_state.header_name == "Etihad Rail":
+        st.session_state.header_name = "Mumbai Rail"
+    else:
+        st.session_state.header_name = "Etihad Rail"
+
 
 # ---- Enhanced CSS with better mobile support ----
 st.markdown(f"""
@@ -112,7 +125,7 @@ st.markdown(f"""
     }}
 
     header[data-testid="stHeader"]::after {{
-        content: "Etihad Rail";
+        content: "{st.session_state.header_name}";
         font-size: 2.5rem;
         font-weight: 650;
         color: var(--text-color);
@@ -700,6 +713,8 @@ elif page == "Database Management":
                     
                 except Exception as e:
                     st.error(f"Error resetting database: {e}")
+    st.button("Change Header", on_click=toggle_header)
+
 elif page == "Category Selection":
     st.header("📂 Category Selection")
 
