@@ -105,8 +105,9 @@ INSTRUCTIONS:
 4. If asked about specific details, cite the source document when relevant
 5. If the query is general conversation like "Hello" or "How are you?", respond appropriately without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
 6. If the query is irrelevant to the context or outside the scope of the documents, politely inform the user that you can only answer questions related to the provided context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
-7. If the query is incomplete or unclear, ask for clarification without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
-8. Maintain a helpful and professional tone
+7. If the content in 'Context from Document' is irrelevant or insufficient to answer the User question, respond accordingly and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
+8. If the query is incomplete or unclear, ask for clarification without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
+9. Maintain a helpful and professional tone
 
 Remember: Only use information from the provided context to answer questions.
 
