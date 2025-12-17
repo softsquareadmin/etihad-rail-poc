@@ -663,7 +663,7 @@ elif page == "Chat Assistant":
 
 # ---- Database Management Page ----
 elif page == "Database Management":
-    st.header("🛠️ Database Management")
+    st.header("Database Management")
     
     # Show detailed statistics
     try:
@@ -682,20 +682,20 @@ elif page == "Database Management":
         st.error(f"Error retrieving database statistics: {e}")
     
     # Database operations
-    st.subheader("🗃️ Database Operations")
+    st.subheader("Clear Chat History")
     
     # Clear chat history
-    if st.button("🧹 Clear Chat History", help="Clear conversation history (keeps documents)"):
+    if st.button("Clear", help="Clear conversation history (keeps documents)"):
         st.session_state.chat_history = []
         st.success("Chat history cleared!")
     
     # Reset entire database
-    st.subheader("⚠️ Reset Database")
-    st.markdown("**Warning:** This will delete all uploaded documents and cannot be undone.")
+    st.subheader("Reset Database")
     
     reset_confirm = st.checkbox("I understand this will delete all documents")
     
     if reset_confirm:
+        st.warning("**Warning:** This will delete all uploaded documents and cannot be undone.")
         if st.button("🗑️ Reset Entire Database", type="secondary"):
             with st.spinner("Resetting database..."):
                 try:
@@ -713,7 +713,8 @@ elif page == "Database Management":
                     
                 except Exception as e:
                     st.error(f"Error resetting database: {e}")
-    st.button("Change Header", on_click=toggle_header)
+    st.subheader("Change Header")
+    st.button("Change", on_click=toggle_header)
 
 elif page == "Category Selection":
     st.header("📂 Category Selection")
