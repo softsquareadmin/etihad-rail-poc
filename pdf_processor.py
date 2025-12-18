@@ -5,6 +5,7 @@ from openai import OpenAI, OpenAIError
 from pinecone import Pinecone
 import google.generativeai as genai
 import httpx
+import base64
 
 def extract_text_from_pdf(pdf_path, gemini_api_key):
     """
@@ -184,6 +185,188 @@ Begin extraction now."""
         print(f"Error extracting text from PDF: {e}")
         return None
 
+def extract_text_from_pdf_openai(pdf_path, openai_api_key):
+    """
+    Extract text from PDF using OpenAI API with comprehensive formatting
+    """
+    try:
+        client = OpenAI(api_key=openai_api_key)
+        
+        print(f"Uploading PDF: {os.path.basename(pdf_path)}")
+        
+        with open(pdf_path, "rb") as f:
+            data = f.read()
+        
+        base64_string = base64.b64encode(data).decode("utf-8")
+        
+        print("🔍 Extracting content from PDF...")
+        
+        response = client.responses.create(
+            model="gpt-5",
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_file",
+                            "filename": os.path.basename(pdf_path),
+                            "file_data": f"data:application/pdf;base64,{base64_string}",
+                        },
+                        {
+                            "type": "input_text",
+                            "text": """Extract ALL text from this document with clear formatting and logical structure.
+ 
+📋 FORMATTING GUIDELINES:
+ 
+1. PAGE MARKERS:
+   Start each page with a clear separator:
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   📄 PAGE [NUMBER]
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 
+2. HIERARCHY & STRUCTURE:
+   - Document title: # TITLE (use single #)
+   - Major sections: ## SECTION NAME (use double ##)
+   - Subsections: ### SUBSECTION NAME (use triple ###)
+   - Always add blank lines before and after headings
+ 
+3. TABLES:
+   Mark tables clearly and preserve structure:
+   📊 TABLE: [Brief description if title exists]
+   | Column 1    | Column 2    | Column 3    |
+   |-------------|-------------|-------------|
+   | Data 1      | Data 2      | Data 3      |
+   | Data 4      | Data 5      | Data 6      |
+   
+   Add blank line before and after tables.
+ 
+4. LISTS:
+   - Numbered lists: Use 1., 2., 3., etc.
+   - Bullet points: Use • or - consistently
+   - Indent sub-items with 2-4 spaces
+   - Keep list items together (don't break mid-list)
+ 
+5. SPECIAL ELEMENTS:
+   Mark different content types clearly:
+   - Warnings: ⚠️ WARNING: [text]
+   - Cautions: ⚠️ CAUTION: [text]
+   - Important notes: 📌 NOTE: [text]
+   - Tips: 💡 TIP: [text]
+   - Instructions: 📝 INSTRUCTIONS:
+   - Examples: 💬 EXAMPLE:
+ 
+6. VISUAL CONTENT:
+   Describe non-text elements:
+   - Images: 🖼️ [IMAGE: Brief description]
+   - Diagrams: 📊 [DIAGRAM: What it shows]
+   - Charts: 📈 [CHART: Type and content]
+   - Photos: 📷 [PHOTO: Subject]
+   - Icons/symbols: [ICON: Description]
+ 
+7. DATA & SPECIFICATIONS:
+   For key-value pairs, use consistent format:
+   Property: Value
+   Another Property: Another Value
+   
+   Group related information together with blank lines between groups.
+ 
+8. PROCEDURES & STEPS:
+   For sequential instructions:
+   ## Procedure Name
+   
+   1. First step description
+      - Sub-point if needed
+      - Another sub-point
+   
+   2. Second step description
+   
+   3. Third step description
+ 
+9. CONTACT INFORMATION:
+   Mark clearly:
+   📞 CONTACT INFORMATION
+   - Phone: [number]
+   - Email: [address]
+   - Website: [url]
+ 
+10. LEGAL/WARRANTY TEXT:
+    Mark sections:
+    📜 [SECTION TYPE: Warranty/Terms/Legal]
+    Keep original numbering (1., a., i., etc.)
+ 
+11. SEMANTIC ORDER:
+    - Follow natural reading order (top-to-bottom, left-to-right)
+    - Keep related content together
+    - Don't split tables, lists, or procedures
+    - Maintain logical flow of information
+ 
+12. SPACING & READABILITY:
+    - Blank line between different sections
+    - Blank line before/after tables
+    - Blank line before/after special callouts
+    - Blank line before/after lists
+    - No excessive blank lines (max 2 in a row)
+ 
+13. TEXT EXTRACTION:
+    - Extract text from images using OCR
+    - Extract text from embedded screenshots
+    - Extract data from charts/graphs if text is visible
+    - Preserve text in headers/footers if important
+    - Include text in watermarks if relevant
+ 
+14. FORMATTING CONSISTENCY:
+    - Use the same style throughout the document
+    - Be consistent with bullets (• or -)
+    - Be consistent with emphasis markers
+    - Maintain consistent indentation
+ 
+IMPORTANT:
+- DO NOT skip any content
+- DO NOT summarize - extract everything verbatim
+- DO maintain logical structure and readability
+- DO describe visual elements that contain information
+- DO preserve the semantic meaning and organization
+ 
+Begin extraction now.""",
+                        },
+                    ],
+                },
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "pdf_extraction",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "pages": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "page_number": {"type": "integer"},
+                                        "content": {"type": "string"}
+                                    },
+                                    "required": ["page_number", "content"],
+                                    "additionalProperties": False
+                                }
+                            }
+                        },
+                        "required": ["pages"],
+                        "additionalProperties": False
+                    },
+                    "strict": True
+                }
+            }
+        )
+        
+        print("✅ PDF content extracted successfully")
+        return response.output_text
+        
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+        return None
+
 def chunk_text(pages_data, chunk_size=1000, overlap=400):
     """
     Split text into overlapping chunks for better context preservation
@@ -286,7 +469,7 @@ def upload_to_pinecone(chunks, embeddings, pdf_filename, pinecone_api_key, pinec
         print(f"Error uploading to Pinecone: {e}")
         return False
 
-def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_api_key, pinecone_index_name):
+def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_api_key, pinecone_index_name, use_gemini=False):
     """
     Main pipeline: Extract text from PDF, chunk it, embed, and upload to Pinecone
     """
@@ -295,9 +478,12 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         pdf_filename = os.path.basename(pdf_path)
         print(f"Processing {pdf_filename}...")
         
-        # Step 1: Extract text using Gemini
+        # Step 1: Extract text using selected API
         print("Extracting text from PDF...")
-        json_response = extract_text_from_pdf(pdf_path, gemini_api_key)
+        if use_gemini:
+            json_response = extract_text_from_pdf(pdf_path, gemini_api_key)
+        else:
+            json_response = extract_text_from_pdf_openai(pdf_path, openai_api_key)
         
         if not json_response:
             print("Failed to extract text from PDF")
