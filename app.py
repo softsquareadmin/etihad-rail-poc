@@ -28,7 +28,7 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 
 if "header_name" not in st.session_state:
-    st.session_state.header_name = "MaintainX AI"
+    st.session_state.header_name = "Etihad Rail"
 if "gemini_upload" not in st.session_state:
     st.session_state.gemini_upload = False
 if "category" not in st.session_state:
@@ -446,12 +446,26 @@ def render_chat_assistant(instance="default"):
 
         # Frequently Asked Questions / Suggestions (expander - uses instance-specific state)
         with st.expander("💡 Frequently Asked Questions / Suggestions", expanded=st.session_state[faq_key]):
-            suggested_questions = [
-                "What are the key safety procedures described in the documents?",
-                "Summarize maintenance schedule guidelines.",
-                "What are the contact details for emergency?",
-                "Available temperature ranges?"
-            ]
+            if st.session_state.get("category") == "HVAC":
+                suggested_questions = [
+                    "What are the key safety procedures described in the documents?",
+                    "Summarize maintenance schedule guidelines.",
+                    "What are the contact details for emergency?",
+                    "Available temperature ranges?"
+                ]
+            elif st.session_state.get("category") == "CCTV System":
+                suggested_questions = [
+                        "Why is the camera not powering ON?",
+                        "Why is the camera not accessible on the network?",
+                        "Why is live video not displaying or freezing?",
+                        "Why are motion detection or alarm events not triggering?"]
+            else:
+                suggested_questions = [
+                    "What are the key safety procedures described in the documents?",
+                    "Summarize maintenance schedule guidelines.",
+                    "What are the contact details for emergency?",
+                    "Available temperature ranges?"
+                ]
 
             # Display questions in a single column layout
             for i, q in enumerate(suggested_questions):
