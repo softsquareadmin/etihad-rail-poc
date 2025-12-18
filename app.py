@@ -29,13 +29,13 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
 
 if "header_name" not in st.session_state:
-    st.session_state.header_name = "Mumbai Rail"
+    st.session_state.header_name = "MaintainX AI"
 
 def img_to_base64(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-st.set_page_config(page_title=st.session_state.header_name, layout="centered", page_icon="etihad_logo.png" if st.session_state.header_name == "Etihad Rail" else "Indian_Railways_logo.png")
+st.set_page_config(page_title=st.session_state.header_name, layout="centered", page_icon="etihad_logo.png" if st.session_state.header_name == "Etihad Rail" else "bot.png")
 if st.session_state.header_name == "Etihad Rail":    
     bot_icon = img_to_base64("etihad_logo.png")
 else:
@@ -43,7 +43,7 @@ else:
 
 def toggle_header():
     if st.session_state.header_name == "Etihad Rail":
-        st.session_state.header_name = "Mumbai Rail"
+        st.session_state.header_name = "MaintainX AI"
     else:
         st.session_state.header_name = "Etihad Rail"
 
@@ -671,7 +671,7 @@ elif page == "Database Management":
         
         # Show recently processed files
         if st.session_state.processed_files:
-            st.subheader("📋 Recently Processed Files")
+            st.subheader("Recently Processed Files")
             
             for file_info in st.session_state.processed_files[-20:]:  # Show last 20
                 status_icon = "✅" if file_info['status'] == 'success' else "❌"
