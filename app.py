@@ -26,7 +26,6 @@ pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone_index_name = os.getenv("PINECONE_INDEX_NAME")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 
-PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
 
 if "header_name" not in st.session_state:
     st.session_state.header_name = "MaintainX AI"
@@ -34,6 +33,12 @@ if "gemini_upload" not in st.session_state:
     st.session_state.gemini_upload = False
 if "category" not in st.session_state:
     st.session_state.category = "HVAC"
+
+if "category" in st.session_state and st.session_state.category == "HVAC":
+    PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf"
+elif "category" in st.session_state and st.session_state.category == "CCTV System":
+    PDF_URL = "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/nmc110.pdf"
+
 
 def img_to_base64(path):
     with open(path, "rb") as f:
