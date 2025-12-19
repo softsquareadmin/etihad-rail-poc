@@ -423,7 +423,11 @@ def render_chat_assistant(instance="default"):
                     bot_reply, source = process_user_query(
                         user_input.strip(),
                         st.session_state[chat_key][:-1],  # previous messages for context
-                        rerank=st.session_state.get(rerank_key, False)
+                        rerank=st.session_state.get(rerank_key, False),
+                        category=st.session_state.get("category", None),
+                        type=st.session_state.get("type", None),
+                        brand=st.session_state.get("brand", None),
+                        model_series=st.session_state.get("model_series", None)
                     )
 
                 # Prepare grounding metadata list from matches
@@ -778,6 +782,7 @@ elif page == "Category Selection":
         'Type',
         type_options
     )
+    st.session_state.type = selected_type
 
     # Filter DF based on Model selection (and Category selection is still active)
     df_filtered_by_type = df_filtered_by_category[df_filtered_by_category['Type'] == selected_type]
@@ -789,6 +794,7 @@ elif page == "Category Selection":
         'Brand',
         brand_options
     )
+    st.session_state.brand = selected_brand
 
     # Filter DF based on Brand selection (and previous selections are still active)
     df_filtered_by_brand = df_filtered_by_type[df_filtered_by_type['Brand'] == selected_brand]
@@ -799,11 +805,10 @@ elif page == "Category Selection":
         'Model / Series',
         model_series_options
     )
+    st.session_state.model_series = selected_model_series
 
     def go_to_checklist():
         st.session_state.page = "Checklist"
-        st.session_state.brand = selected_brand
-        st.session_state.model_series = selected_model_series
 
     st.button("Confirm", on_click=go_to_checklist)
 

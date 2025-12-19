@@ -204,7 +204,7 @@ STRICT RULES:
         print(f"OpenAI error: {e}")
         return "Sorry, there was an error generating a response."
 
-def process_user_query(user_query, chat_history=None, rerank=False):
+def process_user_query(user_query, chat_history=None, rerank=False, category=None, type=None, brand=None, model_series=None):
     """
     Main function to process user queries with RAG pipeline
     """
@@ -217,6 +217,18 @@ def process_user_query(user_query, chat_history=None, rerank=False):
 
     if not is_greeting:
         print("Processing RAG for query ::::::")
+        
+        filters = ""
+        if category:
+            filters += f"category='{category}' AND "
+        if type:
+            filters += f"type='{type}' AND "
+        if brand:
+            filters += f"brand='{brand}' AND "
+        if model_series:
+            filters += f"model_series='{model_series}'"
+        user_query = user_query + " " + filters
+        print("Final user query with filters ::::::", user_query)
         # Step 1: Embed the query
         query_embedding = embed_query(user_query)
         if query_embedding is None:
