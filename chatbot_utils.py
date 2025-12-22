@@ -4,6 +4,7 @@ from pinecone import Pinecone
 import dotenv
 import json
 import cohere
+import io
 
 dotenv.load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -36,7 +37,19 @@ def transcribe_audio(audio_file):
     except Exception as e:
         print(f"Error during transcription: {e}")
         return f"Error: {str(e)}"
-    
+
+def generate_audio_response(text):
+    audio_bytes = io.BytesIO()
+    with openai_client.audio.speech.with_streaming_response.create(
+        model="gpt-4o-mini-tts",
+        voice="coral",
+        input=text,
+        instructions="Speak in a cheerful and positive tone.",
+    ) as response:
+        for chunk in response.iter_bytes():
+            audio_bytes.write(chunk)
+    return audio_bytes
+
 def embed_query(text, model="text-embedding-3-small"):
     """
     Create embedding for user query

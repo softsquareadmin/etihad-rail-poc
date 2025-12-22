@@ -3,9 +3,10 @@ import os
 import dotenv
 import pandas as pd
 from pdf_processor import process_pdf_and_upload, render_pdf_page_to_png_bytes
-from chatbot_utils import process_user_query, transcribe_audio
+from chatbot_utils import process_user_query, transcribe_audio, generate_audio_response
 from pinecone import Pinecone
 import base64
+import io
 
 def pinecone_index_is_empty(pinecone_api_key, pinecone_index_name):
     pc = Pinecone(api_key=pinecone_api_key)
@@ -360,7 +361,9 @@ def render_chat_assistant(instance="default"):
                         if st.button("📄 View Source", key=f"view_source_{instance}_{i}"):
                             png_bytes = render_pdf_page_to_png_bytes(PDF_URL, page_number=int(page_no), zoom=2.0)
                             show_source_dialog(png_bytes)
-
+                if msg["role"] == "assistant" and msg.get("audio_byte"):
+                    st.audio(io.BytesIO(msg["audio_byte"]), autoplay=True)
+            
             # Auto-scroll anchor at the end of messages
             if chat_history:
                 # Create an anchor element at the bottom of chat
@@ -435,6 +438,7 @@ def render_chat_assistant(instance="default"):
                             brand=st.session_state.get("brand", None),
                             model_series=st.session_state.get("model_series", None),
                         )
+                        audio_byte = generate_audio_response(bot_reply)
                 else:
                     # Add user message to the namespaced history
                     st.session_state[chat_key].append({"role": "user", "content": user_input.text.strip()})
@@ -450,7 +454,7 @@ def render_chat_assistant(instance="default"):
                             brand=st.session_state.get("brand", None),
                             model_series=st.session_state.get("model_series", None)
                         )
-                
+                        audio_byte = None
                 # Prepare grounding metadata list from matches
                 groundings = []
                 if source.get('source') and source.get('page'):
@@ -460,7 +464,10 @@ def render_chat_assistant(instance="default"):
                     })
 
                 # Add bot response to namespaced history
-                st.session_state[chat_key].append({"role": "assistant", "content": bot_reply, "groundings": groundings})
+                if audio_byte:
+                    st.session_state[chat_key].append({"role": "assistant", "content": bot_reply, "groundings": groundings, "audio_byte": audio_byte.getvalue()})
+                else:
+                    st.session_state[chat_key].append({"role": "assistant", "content": bot_reply, "groundings": groundings})
 
             except Exception as ex:
                 error_msg = f"Sorry, I encountered an error: {str(ex)}"
