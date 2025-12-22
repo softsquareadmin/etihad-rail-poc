@@ -3,7 +3,7 @@ import os
 import dotenv
 import pandas as pd
 from pdf_processor import process_pdf_and_upload, render_pdf_page_to_png_bytes
-from chatbot_utils import process_user_query
+from chatbot_utils import process_user_query, transcribe_audio
 from pinecone import Pinecone
 import base64
 
@@ -411,25 +411,46 @@ def render_chat_assistant(instance="default"):
             user_input = st.session_state["selected_checklist"]
             st.session_state["selected_checklist"] = None
         else:
-            user_input = st.chat_input("Ask about your documents...")
+            user_input = st.chat_input("Ask about your documents...",accept_audio=True)
 
         if user_input:
-            # Add user message to the namespaced history
-            st.session_state[chat_key].append({"role": "user", "content": user_input.strip()})
-
+            
             try:
-                # Process query
-                with st.spinner("🔍 Searching your documents..."):
-                    bot_reply, source = process_user_query(
-                        user_input.strip(),
-                        st.session_state[chat_key][:-1],  # previous messages for context
-                        rerank=st.session_state.get(rerank_key, False),
-                        category=st.session_state.get("category", None),
-                        type=st.session_state.get("type", None),
-                        brand=st.session_state.get("brand", None),
-                        model_series=st.session_state.get("model_series", None)
-                    )
+                if user_input.audio:
+                    audio_file = user_input.audio if hasattr(user_input, 'audio') else None
+                    if audio_file:
+                        user_query = transcribe_audio(audio_file)
+                    
+                    # Add user message to the namespaced history
+                    st.session_state[chat_key].append({"role": "user", "content": user_query})
+                    
+                    # Process query
+                    with st.spinner("🔍 Searching your documents..."):
+                        bot_reply, source = process_user_query(
+                            user_query,
+                            st.session_state[chat_key][:-1],  # previous messages for context
+                            rerank=st.session_state.get(rerank_key, False),
+                            category=st.session_state.get("category", None),
+                            type=st.session_state.get("type", None),
+                            brand=st.session_state.get("brand", None),
+                            model_series=st.session_state.get("model_series", None),
+                        )
+                else:
+                    # Add user message to the namespaced history
+                    st.session_state[chat_key].append({"role": "user", "content": user_input.text.strip()})
 
+                     # Process query
+                    with st.spinner("🔍 Searching your documents..."):
+                        bot_reply, source = process_user_query(
+                            user_input.text.strip(),
+                            st.session_state[chat_key][:-1],  # previous messages for context
+                            rerank=st.session_state.get(rerank_key, False),
+                            category=st.session_state.get("category", None),
+                            type=st.session_state.get("type", None),
+                            brand=st.session_state.get("brand", None),
+                            model_series=st.session_state.get("model_series", None)
+                        )
+                
                 # Prepare grounding metadata list from matches
                 groundings = []
                 if source.get('source') and source.get('page'):

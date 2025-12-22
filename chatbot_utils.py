@@ -15,7 +15,28 @@ openai_client = OpenAI(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(pinecone_index_name)
 
-
+def transcribe_audio(audio_file):
+    """
+    Transcribes an audio file using OpenAI's Whisper-1 model.
+    Works with file-like objects (e.g., from Streamlit's st.audio_input) 
+    or paths to local files.
+    """
+    try:
+        if not audio_file:
+            return None
+            
+        # Call the Whisper API
+        # The 'audio_file' here is a file-like object provided by Streamlit
+        transcript = openai_client.audio.transcriptions.create(
+            model="whisper-1", 
+            file=audio_file
+        )
+        print("Transcript :::::", transcript.text)
+        return transcript.text
+    except Exception as e:
+        print(f"Error during transcription: {e}")
+        return f"Error: {str(e)}"
+    
 def embed_query(text, model="text-embedding-3-small"):
     """
     Create embedding for user query

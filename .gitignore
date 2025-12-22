@@ -208,3 +208,6 @@ __marimo__/
 
 # Jupyter Notebook 
 test.ipynb
+
+# Python Files
+transcribe.py
