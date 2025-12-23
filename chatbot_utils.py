@@ -24,7 +24,7 @@ def transcribe_audio(audio_file):
     """
     try:
         if not audio_file:
-            return None
+            return ""
             
         # Call the Whisper API
         # The 'audio_file' here is a file-like object provided by Streamlit
@@ -158,14 +158,21 @@ Formatting rules for "answer":
 
 If you use multiple sources, pick the chunk from which more information is used to form the response. Extract the source, page number from the [Source: ..., Page: X, ...] markers in the context."""
 
-    filtered_history = [
-        {"role": msg["role"], "content": msg["content"]}
-        for msg in chat_history
-    ]
+    # Filter chat history to only include 'role' and 'content' for OpenAI API
+    # Force 'content' to be a string to avoid JSON serialization errors
+    filtered_history = []
+    for msg in chat_history:
+        content = msg.get("content", "")
+        if isinstance(content, bytes):
+            content = content.decode('utf-8', errors='ignore')
+        filtered_history.append({
+            "role": msg["role"],
+            "content": str(content)
+        })
     
     messages = [{"role": "system", "content": system_prompt}]
     messages += filtered_history
-    
+    print("Filtered History :::::", filtered_history)
     user_message_content = f"Context from documents:\n\n{context}\n\nUser question: {user_input}"
     messages.append({"role": "user", "content": user_message_content})
     
@@ -224,7 +231,13 @@ STRICT RULES:
 """
 
     messages = [{"role": "system", "content": system_prompt}]
-    messages.append({"role": "user", "content": user_input})
+    
+    # Ensure user_input is a string
+    clean_input = str(user_input)
+    if isinstance(user_input, bytes):
+        clean_input = user_input.decode('utf-8', errors='ignore')
+        
+    messages.append({"role": "user", "content": clean_input})
     
     try:
         response = openai_client.chat.completions.create(
