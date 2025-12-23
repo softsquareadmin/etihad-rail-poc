@@ -29,7 +29,7 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 
 if "header_name" not in st.session_state:
-    st.session_state.header_name = "MaintainX AI"
+    st.session_state.header_name = "Etihad Rail"
 if "gemini_upload" not in st.session_state:
     st.session_state.gemini_upload = False
 if "category" not in st.session_state:
