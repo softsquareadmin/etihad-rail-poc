@@ -425,7 +425,7 @@ def render_chat_assistant(instance="default"):
                         user_query = transcribe_audio(audio_file)
                     
                     # Add user message to the namespaced history
-                    st.session_state[chat_key].append({"role": "user", "content": user_query})
+                    st.session_state[chat_key].append({"role": "user", "content": user_query if user_query.strip() != "" else " "})
                     
                     # Process query
                     with st.spinner("🔍 Searching your documents..."):

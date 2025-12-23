@@ -42,7 +42,7 @@ def generate_audio_response(text):
     audio_bytes = io.BytesIO()
     with openai_client.audio.speech.with_streaming_response.create(
         model="gpt-4o-mini-tts",
-        voice="coral",
+        voice="shimmer",
         input=text,
         instructions="Speak in a cheerful and positive tone.",
     ) as response:
@@ -158,8 +158,13 @@ Formatting rules for "answer":
 
 If you use multiple sources, pick the chunk from which more information is used to form the response. Extract the source, page number from the [Source: ..., Page: X, ...] markers in the context."""
 
+    filtered_history = [
+        {"role": msg["role"], "content": msg["content"]}
+        for msg in chat_history
+    ]
+    
     messages = [{"role": "system", "content": system_prompt}]
-    messages += chat_history
+    messages += filtered_history
     
     user_message_content = f"Context from documents:\n\n{context}\n\nUser question: {user_input}"
     messages.append({"role": "user", "content": user_message_content})
@@ -245,6 +250,9 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
     if chat_history is None:
         chat_history = []
     
+    if user_query.strip() == "":
+        return ("Looks like there’s nothing to process — please enter a valid message", [])
+
     # Checking whether query is a simple greeting or irrelevant 
     response, is_greeting = check_query(user_query)
     source = {"source": "", "page": ""}
