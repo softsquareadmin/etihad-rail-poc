@@ -419,10 +419,12 @@ def render_chat_assistant(instance="default"):
         if user_input:
             
             try:
-                if user_input.audio:
-                    audio_file = user_input.audio if hasattr(user_input, 'audio') else None
-                    if audio_file:
-                        user_query = transcribe_audio(audio_file)
+                # Determine if we have audio or text input
+                has_audio = not isinstance(user_input, str) and getattr(user_input, 'audio', None)
+                
+                if has_audio:
+                    audio_file = user_input.audio
+                    user_query = transcribe_audio(audio_file)
                     
                     # Add user message to the namespaced history
                     st.session_state[chat_key].append({"role": "user", "content": user_query if user_query.strip() != "" else " "})
@@ -440,13 +442,16 @@ def render_chat_assistant(instance="default"):
                         )
                         audio_byte = generate_audio_response(bot_reply)
                 else:
+                    # Handle text input (either string from checklist or object.text from chat_input)
+                    query_text = user_input if isinstance(user_input, str) else user_input.text.strip()
+                    
                     # Add user message to the namespaced history
-                    st.session_state[chat_key].append({"role": "user", "content": user_input.text.strip()})
+                    st.session_state[chat_key].append({"role": "user", "content": query_text})
 
                      # Process query
                     with st.spinner("🔍 Searching your documents..."):
                         bot_reply, source = process_user_query(
-                            user_input.text.strip(),
+                            query_text,
                             st.session_state[chat_key][:-1],  # previous messages for context
                             rerank=st.session_state.get(rerank_key, False),
                             category=st.session_state.get("category", None),
