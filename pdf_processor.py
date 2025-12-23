@@ -63,6 +63,7 @@ def extract_text_from_pdf(pdf_path, gemini_api_key):
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    📄 PAGE [NUMBER]
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    NOTE: Use the absolute physical page number (1 for the first page, 2 for the second, etc.) regardless of any page numbers printed on the document itself.
 
 2. HIERARCHY & STRUCTURE:
    - Document title: # TITLE (use single #)
@@ -223,6 +224,7 @@ def extract_text_from_pdf_openai(pdf_path, openai_api_key):
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    📄 PAGE [NUMBER]
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    NOTE: Use the absolute physical page number (1 for the first page, 2 for the second, etc.) regardless of any page numbers printed on the document itself.
  
 2. HIERARCHY & STRUCTURE:
    - Document title: # TITLE (use single #)

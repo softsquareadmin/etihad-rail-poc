@@ -27,6 +27,10 @@ pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone_index_name = os.getenv("PINECONE_INDEX_NAME")
 gemini_api_key = os.getenv("GEMINI_API_KEY")
 
+URL_LIST = [
+                "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf", 
+                "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/nmc110.pdf"
+            ]
 
 if "header_name" not in st.session_state:
     st.session_state.header_name = "Etihad Rail"
@@ -359,7 +363,8 @@ def render_chat_assistant(instance="default"):
                     if src and page_no:
 
                         if st.button("📄 View Source", key=f"view_source_{instance}_{i}"):
-                            png_bytes = render_pdf_page_to_png_bytes(PDF_URL, page_number=int(page_no), zoom=2.0)
+                            url = [url for url in URL_LIST if src in url][0]
+                            png_bytes = render_pdf_page_to_png_bytes(url, page_number=int(page_no), zoom=2.0)
                             show_source_dialog(png_bytes)
                 if msg["role"] == "assistant" and msg.get("audio_byte"):
                     st.audio(io.BytesIO(msg["audio_byte"]), autoplay=True)
@@ -514,7 +519,11 @@ def render_chat_assistant(instance="default"):
                             bot_reply, source = process_user_query(
                                 q,
                                 st.session_state[chat_key][:-1],
-                                rerank=st.session_state.get(rerank_key, False)
+                                rerank=st.session_state.get(rerank_key, False),
+                                category=st.session_state.get("category", None) if instance == "side" else None,
+                                type=st.session_state.get("type", None) if instance == "side" else None,
+                                brand=st.session_state.get("brand", None) if instance == "side" else None,
+                                model_series=st.session_state.get("model_series", None) if instance == "side" else None
                             )
 
                             groundings = []
@@ -577,11 +586,11 @@ with st.sidebar:
     else:
         default_page = "Category Selection"
     
-    on = st.toggle("Enable Reranking", value=False, help="Toggle to enable or disable reranking of search results")
-    if on:
-        st.session_state.rerank = True
-    else:
-        st.session_state.rerank = False
+    # on = st.toggle("Enable Reranking", value=False, help="Toggle to enable or disable reranking of search results")
+    # if on:
+    #     st.session_state.rerank = True
+    # else:
+    #     st.session_state.rerank = False
     
     page = st.radio(
         "Choose Action:",
