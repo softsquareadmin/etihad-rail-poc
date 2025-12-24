@@ -482,12 +482,13 @@ def render_chat_assistant(instance="default"):
                     with st.spinner("🔍 Searching your documents..."):
                         bot_reply, source = process_user_query(
                             user_query,
-                            st.session_state[chat_key][:-1],  # previous messages for context
+                            st.session_state[chat_key][:-1],
                             rerank=st.session_state.get(rerank_key, False),
                             category=st.session_state.get("category", None),
                             type=st.session_state.get("type", None),
                             brand=st.session_state.get("brand", None),
                             model_series=st.session_state.get("model_series", None),
+                            is_side = True if instance == "side" else False 
                         )
                         audio_byte = generate_audio_response(bot_reply)
                 else:
@@ -506,7 +507,8 @@ def render_chat_assistant(instance="default"):
                             category=st.session_state.get("category", None),
                             type=st.session_state.get("type", None),
                             brand=st.session_state.get("brand", None),
-                            model_series=st.session_state.get("model_series", None)
+                            model_series=st.session_state.get("model_series", None),
+                            is_side = True if instance == "side" else False 
                         )
                         audio_byte = None
                 # Prepare grounding metadata list from matches
@@ -567,7 +569,8 @@ def render_chat_assistant(instance="default"):
                                 category=st.session_state.get("category", None) if instance == "side" else None,
                                 type=st.session_state.get("type", None) if instance == "side" else None,
                                 brand=st.session_state.get("brand", None) if instance == "side" else None,
-                                model_series=st.session_state.get("model_series", None) if instance == "side" else None
+                                model_series=st.session_state.get("model_series", None) if instance == "side" else None,
+                                is_side = True if instance == "side" else False 
                             )
 
                             groundings = []
