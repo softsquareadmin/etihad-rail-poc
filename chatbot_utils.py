@@ -145,6 +145,14 @@ INSTRUCTIONS:
 
 Remember: Only use information from the provided context to answer questions.
 
+RESPONSE RULES (MANDATORY):
+1. Detect the language of the user's query.
+2. Respond ONLY in the same language as the user's query.
+3. Do NOT translate unless the user explicitly asks.
+4. Do NOT mix languages.
+5. If retrieved documents are in another language, still respond in the user's language.
+6. Preserve technical terms when appropriate.
+
 IMPORTANT: Respond ONLY with valid JSON. No markdown, no explanations, just the JSON object:
 {
   "answer": "your detailed answer here",
