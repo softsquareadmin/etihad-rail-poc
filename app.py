@@ -924,7 +924,7 @@ elif page == "Checklist":
             for chk_key, label in CHECKS:
                 st.checkbox(label, key=chk_key)
                 st.button(
-                    "Click here",
+                    "Ask Agent",
                     key=f"btn_{chk_key}",
                     on_click=on_arrow_click,
                     args=(label,),
@@ -944,7 +944,7 @@ elif page == "Checklist":
             for chk_key, label in CHECKS:
                 st.checkbox(label, key=chk_key)
                 st.button(
-                    "Click here",
+                    "Ask Agent",
                     key=f"btn_{chk_key}",
                     on_click=on_arrow_click,
                     args=(label,),
