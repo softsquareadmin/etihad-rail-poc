@@ -172,7 +172,6 @@ If you use multiple sources, pick the chunk from which more information is used 
     
     messages = [{"role": "system", "content": system_prompt}]
     messages += filtered_history
-    print("Filtered History :::::", filtered_history)
     user_message_content = f"Context from documents:\n\n{context}\n\nUser question: {user_input}"
     messages.append({"role": "user", "content": user_message_content})
     

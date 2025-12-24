@@ -7,6 +7,7 @@ from chatbot_utils import process_user_query, transcribe_audio, generate_audio_r
 from pinecone import Pinecone
 import base64
 import io
+from urllib.parse import unquote
 
 def pinecone_index_is_empty(pinecone_api_key, pinecone_index_name):
     pc = Pinecone(api_key=pinecone_api_key)
@@ -31,6 +32,11 @@ URL_LIST = [
                 "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf", 
                 "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/nmc110.pdf"
             ]
+
+def normalize(name: str):
+    name = unquote(name)
+    name = name.replace(" ", "_")
+    return name.lower()
 
 if "header_name" not in st.session_state:
     st.session_state.header_name = "Etihad Rail"
@@ -302,6 +308,44 @@ st.markdown(f"""
         flex-shrink: 0;
     }}
 
+    /* Mobile responsiveness */
+    @media screen and (max-width: 768px) {{
+        header[data-testid="stHeader"]::after {{
+            font-size: 2.0rem !important;
+            font-weight: 600 !important;
+        }}
+
+        h2 {{
+            font-size: 1.5rem !important;
+        }}
+
+        .chat-bubble {{
+            font-size: 0.9rem !important;
+            padding: 10px 14px !important;
+            max-width: 85% !important;
+        }}
+
+        .faq-button {{
+            font-size: 0.85rem !important;
+            padding: 8px 12px !important;
+        }}
+
+        .stats-container, .upload-progress, .success-message, .warning-message {{
+            font-size: 0.85rem !important;
+            padding: 8px !important;
+        }}
+
+        .block-container {{
+            padding-left: 15px !important;
+            padding-right: 15px !important;
+        }}
+
+        [data-testid="stHorizontalBlock"] .stColumn:nth-child(2) [data-testid="stVerticalBlock"] {{
+            height: calc(100vh - 180px) !important;
+            max-height: 450px !important;
+        }}
+    }}
+
     </style>
 """, unsafe_allow_html=True)
 
@@ -361,9 +405,9 @@ def render_chat_assistant(instance="default"):
                     page_no = grounding.get("page_number")
 
                     if src and page_no:
-
                         if st.button("📄 View Source", key=f"view_source_{instance}_{i}"):
-                            url = [url for url in URL_LIST if src in url][0]
+                            src_norm = normalize(src)
+                            url = next(u for u in URL_LIST if normalize(os.path.basename(u)) == src_norm)
                             png_bytes = render_pdf_page_to_png_bytes(url, page_number=int(page_no), zoom=2.0)
                             show_source_dialog(png_bytes)
                 if msg["role"] == "assistant" and msg.get("audio_byte"):
@@ -864,163 +908,60 @@ elif page == "Checklist":
         
         def on_arrow_click(text: str):
             st.session_state.selected_checklist = text
+            st.session_state.verification_chat_open = True
 
         if st.session_state.get('category') == "HVAC":
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.",key="chk_temp_modes")
-            with c2:
-                st.button("›", key="btn_temp_modes", on_click=on_arrow_click, args=("Check that the temperature is set correctly for Cooling, Heating, and Auto modes.",))
-
-            # 2
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check if the ON lamp on the wired controller is flashing and record the error code.",key="chk_on_lamp")
-            with c2:
-                st.button("›", key="btn_on_lamp", on_click=on_arrow_click, args=("Check if the ON lamp on the wired controller is flashing and record the error code.",))
-
-            # 3
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check if the lamp near the wireless receiver on the indoor unit is flashing?.",key="chk_wireless_lamp")
-            with c2:
-                st.button("›", key="btn_wireless_lamp", on_click=on_arrow_click, args=("Check if the lamp near the wireless receiver on the indoor unit is flashing?.",))
-
-            # 4
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.",key="chk_mode")
-            with c2:
-                st.button("›", key="btn_mode", on_click=on_arrow_click, args=("Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected.",))
-
-            # 5
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check if any error code is shown on the remote display.",key="chk_remote_error")
-            with c2:
-                st.button("›", key="btn_remote_error", on_click=on_arrow_click, args=("Check if any error code is shown on the remote display.",))
-
-            # 6
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check that the timer settings are set correctly and only one timer type is in use.",key="chk_timer")
-            with c2:
-                st.button("›", key="btn_timer", on_click=on_arrow_click, args=("Check that the timer settings are set correctly and only one timer type is in use.",))
-
-            # 7
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check that the air filters are clean, in good condition, and fitted properly.",key="chk_filters")
-            with c2:
-                st.button("›", key="btn_filters", on_click=on_arrow_click, args=("Check that the air filters are clean, in good condition, and fitted properly.",))
-
-            # 8
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox("Check if any alarm or flashing light is present and record the details.",key="chk_alarm")
-            with c2:
-                st.button("›", key="btn_alarm", on_click=on_arrow_click, args=("Check if any alarm or flashing light is present and record the details.",))
+            CHECKS = [
+                ("chk_temp_modes", "Check that the temperature is set correctly for Cooling, Heating, and Auto modes."),
+                ("chk_on_lamp", "Check if the ON lamp on the wired controller is flashing and record the error code."),
+                ("chk_wireless_lamp", "Check if the lamp near the wireless receiver on the indoor unit is flashing?."),
+                ("chk_mode", "Check that the correct operating mode (Cool / Heat / Dry / Fan / Auto / Vent) is selected."),
+                ("chk_remote_error", "Check if any error code is shown on the remote display."),
+                ("chk_timer", "Check that the timer settings are set correctly and only one timer type is in use."),
+                ("chk_filters", "Check that the air filters are clean, in good condition, and fitted properly."),
+                ("chk_alarm", "Check if any alarm or flashing light is present and record the details."),
+            ]
+            for chk_key, label in CHECKS:
+                st.checkbox(label, key=chk_key)
+                st.button(
+                    "Click here",
+                    key=f"btn_{chk_key}",
+                    on_click=on_arrow_click,
+                    args=(label,),
+                    type='tertiary'
+                )
         else:
-            # 1
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check that the camera power supply is stable at DC 12V and the unit powers ON correctly.",
-                    key="chk_power"
+            CHECKS = [
+                ("chk_power", "Check that the camera power supply is stable at DC 12V and the unit powers ON correctly."),
+                ("chk_network", "Check if the network link LED is active and the camera IP is reachable on the network."),
+                ("chk_video", "Check if live video is displayed correctly in the web browser without freezing or delay."),
+                ("chk_video_settings", "Check that the correct video resolution, frame rate, and compression settings are applied."),
+                ("chk_lens", "Check the camera lens for dust or damage and confirm image focus and clarity."),
+                ("chk_motion", "Check if motion detection is enabled and verify correct detection response."),
+                ("chk_alarm_io", "Check alarm input and output connections and confirm correct NO/NC operation."),
+                ("chk_time", "Check system date and time settings and confirm synchronization is correct."),
+            ]
+            for chk_key, label in CHECKS:
+                st.checkbox(label, key=chk_key)
+                st.button(
+                    "Click here",
+                    key=f"btn_{chk_key}",
+                    on_click=on_arrow_click,
+                    args=(label,),
+                    type='tertiary'
                 )
-            with c2:
-                st.button("›", key="btn_power", on_click=on_arrow_click,
-                        args=("Check that the camera power supply is stable at DC 12V and the unit powers ON correctly.",))
-            
-            # 2
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check if the network link LED is active and the camera IP is reachable on the network.",
-                    key="chk_network"
-                )
-            with c2:
-                st.button("›", key="btn_network", on_click=on_arrow_click,
-                        args=("Check if the network link LED is active and the camera IP is reachable on the network.",))
-            
-            # 3
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check if live video is displayed correctly in the web browser without freezing or delay.",
-                    key="chk_video"
-                )
-            with c2:
-                st.button("›", key="btn_video", on_click=on_arrow_click,
-                        args=("Check if live video is displayed correctly in the web browser without freezing or delay.",))
-            
-            # 4
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check that the correct video resolution, frame rate, and compression settings are applied.",
-                    key="chk_video_settings"
-                )
-            with c2:
-                st.button("›", key="btn_video_settings", on_click=on_arrow_click,
-                        args=("Check that the correct video resolution, frame rate, and compression settings are applied.",))
-            
-            # 5
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check the camera lens for dust or damage and confirm image focus and clarity.",
-                    key="chk_lens"
-                )
-            with c2:
-                st.button("›", key="btn_lens", on_click=on_arrow_click,
-                        args=("Check the camera lens for dust or damage and confirm image focus and clarity.",))
-            
-            # 6
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check if motion detection is enabled and verify correct detection response.",
-                    key="chk_motion"
-                )
-            with c2:
-                st.button("›", key="btn_motion", on_click=on_arrow_click,
-                        args=("Check if motion detection is enabled and verify correct detection response.",))
-            
-            # 7
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check alarm input and output connections and confirm correct NO/NC operation.",
-                    key="chk_alarm_io"
-                )
-            with c2:
-                st.button("›", key="btn_alarm_io", on_click=on_arrow_click,
-                        args=("Check alarm input and output connections and confirm correct NO/NC operation.",))
-            
-            # 8
-            c1, c2 = st.columns([12, 1])
-            with c1:
-                st.checkbox(
-                    "Check system date and time settings and confirm synchronization is correct.",
-                    key="chk_time"
-                )
-            with c2:
-                st.button("›", key="btn_time", on_click=on_arrow_click,
-                        args=("Check system date and time settings and confirm synchronization is correct.",))
-
     with col_chat:
         if st.session_state.verification_chat_open:
             render_chat_assistant(instance="side")
     
     bottom_bar = st.container(horizontal=True, horizontal_alignment="right")
     with bottom_bar:
-        if not st.session_state.verification_chat_open:
-            if st.button("Ask Agent", type="primary"):
-                st.session_state.verification_chat_open = True
-                st.rerun()
-        else:
-            if st.button("Close Agent", type="secondary"):
+        if st.session_state.verification_chat_open:
+            if st.button("Close Agent", type="primary"):
                 st.session_state.verification_chat_open = False
                 st.rerun()
+        # else:
+        #     if st.button("Close Agent", type="secondary"):
+        #         st.session_state.verification_chat_open = False
+        #         st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
