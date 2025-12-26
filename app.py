@@ -559,7 +559,7 @@ def render_chat_assistant(instance="default"):
                 suggested_questions = [
                     "What are the key safety procedures described in the documents?",
                     "Summarize maintenance schedule guidelines.",
-                    "What are the contact details for emergency?",
+                    "I need contact details.",
                     "Available temperature ranges?"
                 ]
             elif st.session_state.get("category") == "CCTV System":
