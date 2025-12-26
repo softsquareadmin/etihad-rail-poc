@@ -411,7 +411,11 @@ def render_chat_assistant(instance="default"):
                             png_bytes = render_pdf_page_to_png_bytes(url, page_number=int(page_no), zoom=2.0)
                             show_source_dialog(png_bytes)
                 if msg["role"] == "assistant" and msg.get("audio_byte"):
-                    st.audio(io.BytesIO(msg["audio_byte"]), autoplay=True)
+                    if not msg.get("played", False):
+                        st.audio(io.BytesIO(msg["audio_byte"]), autoplay=True)
+                        msg["played"] = True
+                    else:
+                        st.audio(io.BytesIO(msg["audio_byte"]), autoplay=False)
             
             # Auto-scroll anchor at the end of messages
             if chat_history:
@@ -587,10 +591,10 @@ def render_chat_assistant(instance="default"):
                                 q,
                                 st.session_state[chat_key][:-1],
                                 rerank=st.session_state.get(rerank_key, False),
-                                category=st.session_state.get("category", None) if instance == "side" else None,
-                                type=st.session_state.get("type", None) if instance == "side" else None,
-                                brand=st.session_state.get("brand", None) if instance == "side" else None,
-                                model_series=st.session_state.get("model_series", None) if instance == "side" else None,
+                                category=st.session_state.get("category", None),
+                                type=st.session_state.get("type", None),
+                                brand=st.session_state.get("brand", None),
+                                model_series=st.session_state.get("model_series", None),
                                 is_side = True if instance == "side" else False 
                             )
 

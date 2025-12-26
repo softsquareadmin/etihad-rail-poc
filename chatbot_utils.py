@@ -126,22 +126,24 @@ def rerank_matches(user_query, matches, top_k=5):
         print(f"Cohere rerank error: {e}")
         return matches[:top_k]
 
-def generate_response(chat_history, context, user_input):
+def generate_response(chat_history, context, user_input, query_context=None):
     """
     Generate response using GPT with retrieved context
     """
     system_prompt = """You are a helpful AI assistant that answers questions based on the provided document context.
 
 INSTRUCTIONS:
-1. Answer questions accurately using only the information from the provided context
-2. If the context doesn't contain enough information to answer the question, say so
-3. Be concise but comprehensive in your responses
-4. If asked about specific details, cite the source document when relevant
-5. If the query is general conversation like "Hello" or "How are you?", respond appropriately without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
-6. If the query is irrelevant to the context or outside the scope of the documents, politely inform the user that you can only answer questions related to the provided context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
-7. If the content in 'Context from Document' is irrelevant or insufficient to answer the User question, respond accordingly and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
-8. If the query is incomplete or unclear, ask for clarification without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}
-9. Maintain a helpful and professional tone
+1. Answer questions accurately using ONLY the information from the provided 'Context from documents'.
+2. PRIORITIZE 'Context from documents' over 'Conversation History' for all factual information.
+3. 'Conversation History' should ONLY be used to understand the user's intent (e.g., resolving pronouns like "it" or "that unit") and context of the conversation.
+4. If the 'Context from documents' does not contain the answer, state that you don't have that information, EVEN IF the answer was mentioned in a previous turn of the 'Conversation History'. Do NOT leak information from history into the current answer if it's not in the current context.
+5. Be concise but comprehensive in your responses.
+6. Cite the source document and page number ONLY if the information is present in the current 'Context from documents'.
+7. If the query is general conversation like "Hello" or "How are you?", respond appropriately without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
+8. If the query is irrelevant to the context or outside the scope of the documents, politely inform the user that you can only answer questions related to the provided context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
+9. If the content in 'Context from Document' is irrelevant or insufficient to answer the User question, respond accordingly and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
+10. If the query is incomplete or unclear, ask for clarification without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
+11. Maintain a helpful and professional tone.
 
 Remember: Only use information from the provided context to answer questions.
 
@@ -180,7 +182,10 @@ If you use multiple sources, pick the chunk from which more information is used 
     
     messages = [{"role": "system", "content": system_prompt}]
     messages += filtered_history
-    user_message_content = f"Context from documents:\n\n{context}\n\nUser question: {user_input}"
+    
+    query_context_str = f"Query Context (Equipment Details): {query_context}\n\n" if query_context else ""
+    print("Query Context received :::::", query_context_str)
+    user_message_content = f"{query_context_str}Context from documents:\n\n{context}\n\nUser question: {user_input}"
     messages.append({"role": "user", "content": user_message_content})
     
     try:
@@ -194,7 +199,7 @@ If you use multiple sources, pick the chunk from which more information is used 
         parsed = json.loads(result)
         answer = parsed.get("answer", "")
         source = parsed.get("metadata", {})
-        
+        print("Open AI Source :::::", source)
         return answer, source
     except OpenAIError as e:
         print(f"OpenAI error: {e}")
@@ -280,18 +285,6 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
     if not is_greeting:
         print("Processing RAG for query ::::::")
         
-        # if is_side:
-        filters = ""
-        if category:
-            filters += f"category='{category}' AND "
-        if type:
-            filters += f"type='{type}' AND "
-        if brand:
-            filters += f"brand='{brand}' AND "
-        if model_series:
-            filters += f"model_series='{model_series}'"
-        user_query = user_query + " " + filters
-        print("Final user query with filters ::::::", user_query)
         # Step 1: Embed the query
         query_embedding = embed_query(user_query)
         if query_embedding is None:
@@ -312,7 +305,9 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
         context = build_context_from_matches(matches)
         
         # Step 4: Generate response
-        response, source = generate_response(chat_history, context, user_query)
+        # Pass filters as query context to the LLM
+        query_context = f"Category: {category}, Type: {type}, Brand: {brand}, Model Series: {model_series}"
+        response, source = generate_response(chat_history, context, user_query, query_context=query_context)
 
     # Return both the generated response and the raw matches (so callers can show grounding)
     return (response, source)
