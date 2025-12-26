@@ -462,6 +462,27 @@ def render_chat_assistant(instance="default"):
         if instance == "side" and st.session_state.verification_chat_open and st.session_state.get("selected_checklist", None):
             user_input = st.session_state["selected_checklist"]
             st.session_state["selected_checklist"] = None
+            
+            # Mobile auto-scroll: inject scroll script when a new Ask Agent button is clicked
+            if st.session_state.get('mobile_scroll_pending', False):
+                import streamlit.components.v1 as components
+                # Use st.sidebar or a separate container to avoid layout disruption
+                components.html("""
+                    <script>
+                        setTimeout(function() {
+                            if (window.parent.innerWidth <= 640) {
+                                const columns = parent.document.querySelectorAll('[data-testid="stHorizontalBlock"] > .stColumn');
+                                if (columns.length >= 2) {
+                                    const chatColumn = columns[1];
+                                    if (chatColumn) {
+                                        chatColumn.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }
+                                }
+                            }
+                        }, 200);
+                    </script>
+                """, height=0)
+                st.session_state.mobile_scroll_pending = False
         else:
             user_input = st.chat_input("Ask about your documents...",accept_audio=True)
 
@@ -912,6 +933,7 @@ elif page == "Checklist":
         def on_arrow_click(text: str):
             st.session_state.selected_checklist = text
             st.session_state.verification_chat_open = True
+            st.session_state.mobile_scroll_pending = True
 
         if st.session_state.get('category') == "HVAC":
             CHECKS = [
