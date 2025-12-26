@@ -280,17 +280,17 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
     if not is_greeting:
         print("Processing RAG for query ::::::")
         
-        if is_side:
-            filters = ""
-            if category:
-                filters += f"category='{category}' AND "
-            if type:
-                filters += f"type='{type}' AND "
-            if brand:
-                filters += f"brand='{brand}' AND "
-            if model_series:
-                filters += f"model_series='{model_series}'"
-            user_query = user_query + " " + filters
+        # if is_side:
+        filters = ""
+        if category:
+            filters += f"category='{category}' AND "
+        if type:
+            filters += f"type='{type}' AND "
+        if brand:
+            filters += f"brand='{brand}' AND "
+        if model_series:
+            filters += f"model_series='{model_series}'"
+        user_query = user_query + " " + filters
         print("Final user query with filters ::::::", user_query)
         # Step 1: Embed the query
         query_embedding = embed_query(user_query)
