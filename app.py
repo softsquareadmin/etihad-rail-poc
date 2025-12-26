@@ -866,6 +866,8 @@ elif page == "Database Management":
         st.markdown("OpenAI Upload Enabled")
 
 elif page == "Category Selection":
+    st.session_state.chat_history_side = []
+    st.session_state.verification_chat_open = False
     st.header("📂 Category Selection")
 
     df = pd.read_excel('Model_Series.xlsx')
