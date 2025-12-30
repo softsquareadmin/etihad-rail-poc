@@ -43,7 +43,7 @@ if "header_name" not in st.session_state:
 if "gemini_upload" not in st.session_state:
     st.session_state.gemini_upload = False
 if "change_transcription_model" not in st.session_state:
-    st.session_state.change_transcription_model = False
+    st.session_state.change_transcription_model = True
 if "category" not in st.session_state:
     st.session_state.category = "HVAC"
 
