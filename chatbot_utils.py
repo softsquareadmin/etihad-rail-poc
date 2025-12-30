@@ -13,6 +13,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone_index_name = os.getenv("PINECONE_INDEX_NAME")
 cohere_api_key = os.getenv("COHERE_API_KEY")
+transcription_model = os.getenv("TRANSCRIPTION_MODEL")
 
 openai_client = OpenAI(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
@@ -40,7 +41,7 @@ def transcribe_audio(audio_file):
             return transcript.text
         else:
             model = genai.GenerativeModel(
-                                            model_name= "gemini-2.5-flash",
+                                            model_name= transcription_model,
                                             generation_config={
                                                 "response_mime_type": "application/json"
                                             }
