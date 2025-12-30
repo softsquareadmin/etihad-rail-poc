@@ -42,6 +42,8 @@ if "header_name" not in st.session_state:
     st.session_state.header_name = "Etihad Rail"
 if "gemini_upload" not in st.session_state:
     st.session_state.gemini_upload = False
+if "change_transcription_model" not in st.session_state:
+    st.session_state.change_transcription_model = False
 if "category" not in st.session_state:
     st.session_state.category = "HVAC"
 
@@ -70,6 +72,8 @@ def toggle_header():
 def toggle_upload_chat():
     st.session_state.gemini_upload = not st.session_state.get("gemini_upload", False)
 
+def change_model():
+    st.session_state.change_transcription_model = not st.session_state.get("change_transcription_model", False)
 
 # ---- Enhanced CSS with better mobile support ----
 st.markdown(f"""
@@ -501,8 +505,10 @@ def render_chat_assistant(instance="default"):
                     user_query = transcribe_audio(audio_file)
                     
                     # Add user message to the namespaced history
-                    st.session_state[chat_key].append({"role": "user", "content": user_query if user_query.strip() != "" else " "})
-                    
+                    if isinstance(user_query, dict):
+                        st.session_state[chat_key].append({"role": "user", "content": user_query["transcript"] if user_query["transcript"].strip() != "" else " "})
+                    else:
+                        st.session_state[chat_key].append({"role": "user", "content": user_query if user_query.strip() != "" else " "})
                     # Process query
                     with st.spinner("🔍 Searching your documents..."):
                         bot_reply, source = process_user_query(
@@ -868,6 +874,14 @@ elif page == "Database Management":
         st.markdown("Gemini Upload Enabled")
     else:
         st.markdown("OpenAI Upload Enabled")
+
+    st.subheader("Change Transcription Model")
+    st.button("Switch", on_click=change_model, key = "change_transcription_btn")
+
+    if st.session_state.get("change_transcription_model", False):
+        st.markdown("Gemini Transcription Enabled")
+    else:
+        st.markdown("OpenAI Transcription Enabled")
 
 elif page == "Category Selection":
     st.session_state.chat_history_side = []

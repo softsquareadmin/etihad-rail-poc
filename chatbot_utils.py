@@ -1,10 +1,12 @@
 import os
 from openai import OpenAI, OpenAIError
+import google.generativeai as genai
 from pinecone import Pinecone
 import dotenv
 import json
 import cohere
 import io
+import streamlit as st
 
 dotenv.load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -15,6 +17,7 @@ cohere_api_key = os.getenv("COHERE_API_KEY")
 openai_client = OpenAI(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(pinecone_index_name)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 def transcribe_audio(audio_file):
     """
@@ -25,15 +28,50 @@ def transcribe_audio(audio_file):
     try:
         if not audio_file:
             return ""
-            
-        # Call the Whisper API
-        # The 'audio_file' here is a file-like object provided by Streamlit
-        transcript = openai_client.audio.transcriptions.create(
-            model="whisper-1", 
-            file=audio_file
-        )
-        print("Transcript :::::", transcript.text)
-        return transcript.text
+
+        if st.session_state.change_transcription_model == False:    
+            # Call the Whisper API
+            # The 'audio_file' here is a file-like object provided by Streamlit
+            transcript = openai_client.audio.transcriptions.create(
+                model="whisper-1", 
+                file=audio_file
+            )
+            print("Transcript :::::", transcript.text)
+            return transcript.text
+        else:
+            model = genai.GenerativeModel(
+                                            model_name= "gemini-2.5-flash",
+                                            generation_config={
+                                                "response_mime_type": "application/json"
+                                            }
+                                        )
+            transcript = model.generate_content([
+                """Translate this audio accurately in ENGLISH.
+                NO Foreign Language is accepted, Translate everything into ENGLISH
+                
+                Respond ONLY in valid JSON with this exact format:
+                {
+                "lang": "Detected Language of the audio",
+                "translation": "<translated text>",
+                "transcript": "Actual transcript of the audio in its original language"
+                }
+
+                Rules:
+                - Output must be valid JSON
+                - No markdown
+                - No explanations
+                - No extra keys
+                """,
+                {
+                    "mime_type": audio_file.type,
+                    "data": audio_file.getvalue()
+                }
+            ])
+            data = json.loads(transcript.text)
+            print("Audio Translation :::::", data["translation"])
+            print("Audio Trancription :::::", data["transcript"])
+            print("Detected Language :::::", data["lang"])
+            return data   
     except Exception as e:
         print(f"Error during transcription: {e}")
         return f"Error: {str(e)}"
@@ -126,11 +164,11 @@ def rerank_matches(user_query, matches, top_k=5):
         print(f"Cohere rerank error: {e}")
         return matches[:top_k]
 
-def generate_response(chat_history, context, user_input, query_context=None):
+def generate_response(chat_history, context, user_input, language, query_context=None):
     """
     Generate response using GPT with retrieved context
     """
-    system_prompt = """You are a helpful AI assistant that answers questions based on the provided document context.
+    system_prompt = f"""You are a helpful AI assistant that answers questions based on the provided document context.
 
 INSTRUCTIONS:
 1. Answer questions accurately using ONLY the information from the provided 'Context from documents'.
@@ -139,27 +177,25 @@ INSTRUCTIONS:
 4. If the 'Context from documents' does not contain the answer, state that you don't have that information, EVEN IF the answer was mentioned in a previous turn of the 'Conversation History'. Do NOT leak information from history into the current answer if it's not in the current context.
 5. Be concise but comprehensive in your responses.
 6. Cite the source document and page number ONLY if the information is present in the current 'Context from documents'.
-7. If the query is general conversation like "Hello" or "How are you?", respond appropriately without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
-8. If the query is irrelevant to the context or outside the scope of the documents, politely inform the user that you can only answer questions related to the provided context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
-9. If the content in 'Context from Document' is irrelevant or insufficient to answer the User question, respond accordingly and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
-10. If the query is incomplete or unclear, ask for clarification without using the context and DO NOT cite any sources, add empty metadata like {"source": "", "page": ""}.
+7. If the query is general conversation like "Hello" or "How are you?", respond appropriately without using the context and DO NOT cite any sources, add empty metadata like {{"source": "", "page": ""}}.
+8. If the query is irrelevant to the context or outside the scope of the documents, politely inform the user that you can only answer questions related to the provided context and DO NOT cite any sources, add empty metadata like {{"source": "", "page": ""}}.
+9. If the content in 'Context from Document' is irrelevant or insufficient to answer the User question, respond accordingly and DO NOT cite any sources, add empty metadata like {{"source": "", "page": ""}}.
+10. If the query is incomplete or unclear, ask for clarification without using the context and DO NOT cite any sources, add empty metadata like {{"source": "", "page": ""}}.
 11. Maintain a helpful and professional tone.
 
 Remember: Only use information from the provided context to answer questions.
 
 RESPONSE RULES (MANDATORY):
-1. Detect the language of the user's query.
-2. Respond ONLY in the same language as the user's query.
-3. Do NOT translate unless the user explicitly asks.
-4. Do NOT mix languages.
-5. If retrieved documents are in another language, still respond in the user's language.
-6. Preserve technical terms when appropriate.
+1. Respond ONLY in Language: {language}, NOTE: If Language is None then respond in the language used in the User Query.
+2. Do NOT translate unless the user explicitly asks.
+3. If retrieved documents are in another language, still respond in the Prefered Language above.
+4. Preserve technical terms when appropriate.
 
 IMPORTANT: Respond ONLY with valid JSON. No markdown, no explanations, just the JSON object:
-{
+{{
   "answer": "your detailed answer here",
-  "metadata": {"source": "Source Name", "page": X}
-}
+  "metadata": {{"source": "Source Name", "page": X}}
+}}
 
 Formatting rules for "answer":
 - Format the content with HTML tags where appropriate (e.g., <b>, <i>, <ul>, <li>, <p>, etc.)
@@ -205,11 +241,11 @@ If you use multiple sources, pick the chunk from which more information is used 
         print(f"OpenAI error: {e}")
         return "Sorry, there was an error generating a response."
 
-def check_query(user_input):
+def check_query(user_input, lang):
     """
     Generate response using GPT with retrieved context
     """
-    system_prompt = """You are a helpful AI assistant whose ONLY task is to determine whether a user query is a
+    system_prompt = f"""You are a helpful AI assistant whose ONLY task is to determine whether a user query is a
 general conversational message or not.
 
 GENERAL CONVERSATION includes (but is not limited to):
@@ -223,19 +259,20 @@ GENERAL CONVERSATION includes (but is not limited to):
 
 INSTRUCTIONS:
 1. If the user query is general conversation, respond with:
-   {
+   {{
      "is_greeting": true,
      "response": "<polite, friendly conversational reply>"
-   }
+   }}
 
 2. If the user query is NOT general conversation, respond with:
-   {
+   {{
      "is_greeting": false,
      "response": ""
-   }
+   }}
 
 STRICT RULES:
 - Respond ONLY with valid JSON
+- Generate response ONLY in Language: {lang}, NOTE: If Language is None then respond in the language used in User Query.
 - Do NOT add explanations, comments, or extra text
 - The "response" field must contain a friendly, short reply ONLY when is_greeting = true
 - Use simple HTML formatting (<p>, <b>, <i>, <br>) inside "response" if helpful
@@ -272,21 +309,30 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
     """
     Main function to process user queries with RAG pipeline
     """
+    if isinstance(user_query, dict):
+        translation = user_query.get("translation", "")
+        lang = user_query.get("lang", "None")
+        query = user_query.get("transcript", "")
+    else:
+        query = user_query
+        translation = user_query
+        lang = "None"
+    
     if chat_history is None:
         chat_history = []
     
-    if user_query.strip() == "":
+    if query.strip() == "":
         return ("Looks like there’s nothing to process — please enter a valid message", [])
 
     # Checking whether query is a simple greeting or irrelevant 
-    response, is_greeting = check_query(user_query)
+    response, is_greeting = check_query(query, lang)
     source = {"source": "", "page": ""}
 
     if not is_greeting:
         print("Processing RAG for query ::::::")
         
         # Step 1: Embed the query
-        query_embedding = embed_query(user_query)
+        query_embedding = embed_query(translation)
         if query_embedding is None:
             return ("Sorry, I couldn't process your query at the moment. Please try again.", [])
         
@@ -298,7 +344,7 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
         
         # Optional Step: Rerank matches using Cohere
         if rerank:
-            matches = rerank_matches(user_query, matches, top_k=5)
+            matches = rerank_matches(translation, matches, top_k=5)
             print("Reranked matches ::::::", matches)
         
         # Step 3: Build context from matches
@@ -307,7 +353,7 @@ def process_user_query(user_query, chat_history=None, rerank=False, category=Non
         # Step 4: Generate response
         # Pass filters as query context to the LLM
         query_context = f"Category: {category}, Type: {type}, Brand: {brand}, Model Series: {model_series}"
-        response, source = generate_response(chat_history, context, user_query, query_context=query_context)
+        response, source = generate_response(chat_history, context, query, query_context=query_context, language = lang)
 
     # Return both the generated response and the raw matches (so callers can show grounding)
     return (response, source)
