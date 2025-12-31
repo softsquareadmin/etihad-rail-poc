@@ -506,7 +506,7 @@ def render_chat_assistant(instance="default"):
                     
                     # Add user message to the namespaced history
                     if isinstance(user_query, dict):
-                        st.session_state[chat_key].append({"role": "user", "content": user_query["transcript"] if user_query["transcript"].strip() != "" else " "})
+                        st.session_state[chat_key].append({"role": "user", "content": user_query.get("transcript") if user_query.get("transcript").strip() != "" else " "})
                     else:
                         st.session_state[chat_key].append({"role": "user", "content": user_query if user_query.strip() != "" else " "})
                     # Process query

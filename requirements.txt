@@ -3,6 +3,7 @@ openai
 pinecone
 python-dotenv
 google-generativeai
+google-genai
 pymupdf
 pillow
 cohere

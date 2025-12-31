@@ -1,11 +1,13 @@
 import os
 from openai import OpenAI, OpenAIError
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from pinecone import Pinecone
 import dotenv
 import json
 import cohere
 import io
+import wave
 import streamlit as st
 
 dotenv.load_dotenv()
@@ -13,12 +15,16 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 pinecone_index_name = os.getenv("PINECONE_INDEX_NAME")
 cohere_api_key = os.getenv("COHERE_API_KEY")
-transcription_model = os.getenv("TRANSCRIPTION_MODEL")
+gemini_transcription_model = os.getenv("GEMINI_TRANSCRIPTION_MODEL")
+openai_transcription_model = os.getenv("OPENAI_TRANSCRIPTION_MODEL")
+gemini_audio_generation_model = os.getenv("GEMINI_AUDIO_GENERATION_MODEL")
+openai_audio_generation_model = os.getenv("OPENAI_AUDIO_GENERATION_MODEL")
+gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 openai_client = OpenAI(api_key=openai_api_key)
 pc = Pinecone(api_key=pinecone_api_key)
 index = pc.Index(pinecone_index_name)
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+gemini_client = genai.Client(api_key=gemini_api_key)
 
 def transcribe_audio(audio_file):
     """
@@ -34,60 +40,92 @@ def transcribe_audio(audio_file):
             # Call the Whisper API
             # The 'audio_file' here is a file-like object provided by Streamlit
             transcript = openai_client.audio.transcriptions.create(
-                model="whisper-1", 
+                model=openai_transcription_model, 
                 file=audio_file
             )
             print("Transcript :::::", transcript.text)
             return transcript.text
         else:
-            model = genai.GenerativeModel(
-                                            model_name= transcription_model,
-                                            generation_config={
-                                                "response_mime_type": "application/json"
-                                            }
-                                        )
-            transcript = model.generate_content([
-                """Translate this audio accurately in ENGLISH.
-                NO Foreign Language is accepted, Translate everything into ENGLISH
-                
-                Respond ONLY in valid JSON with this exact format:
-                {
-                "lang": "Detected Language of the audio",
-                "translation": "<translated text>",
-                "transcript": "Actual transcript of the audio in its original language"
-                }
+            transcript = gemini_client.models.generate_content(
+                model=gemini_transcription_model,
+                contents=[
+                    types.Part.from_bytes(
+                        data=audio_file.getvalue(),
+                        mime_type=audio_file.type
+                    ),
+                    """ Translate this audio accurately in ENGLISH.
+                        NO Foreign Language is accepted, Translate everything into ENGLISH
+                        
+                        Respond ONLY in valid JSON with this exact format:
+                        {
+                        "lang": "Detected Language of the audio",
+                        "translation": "<translated text>",
+                        "transcript": "Actual transcript of the audio in its original language"
+                        }
 
-                Rules:
-                - Output must be valid JSON
-                - No markdown
-                - No explanations
-                - No extra keys
-                """,
-                {
-                    "mime_type": audio_file.type,
-                    "data": audio_file.getvalue()
-                }
-            ])
+                        Rules:
+                        - Output must be valid JSON
+                        - No markdown
+                        - No explanations
+                        - No extra keys
+                    """,
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                ),
+            )
             data = json.loads(transcript.text)
-            print("Audio Translation :::::", data["translation"])
-            print("Audio Trancription :::::", data["transcript"])
-            print("Detected Language :::::", data["lang"])
+            print("Data :::::", data)
+            print("Audio Translation :::::", data.get("translation"))
+            print("Audio Trancription :::::", data.get("transcript"))
+            print("Detected Language :::::", data.get("lang"))
             return data   
     except Exception as e:
         print(f"Error during transcription: {e}")
         return f"Error: {str(e)}"
 
 def generate_audio_response(text):
-    audio_bytes = io.BytesIO()
-    with openai_client.audio.speech.with_streaming_response.create(
-        model="gpt-4o-mini-tts",
-        voice="shimmer",
-        input=text,
-        instructions="Speak in a cheerful and positive tone.",
-    ) as response:
-        for chunk in response.iter_bytes():
-            audio_bytes.write(chunk)
-    return audio_bytes
+    if st.session_state.change_transcription_model == False:
+        audio_bytes = io.BytesIO()
+        with openai_client.audio.speech.with_streaming_response.create(
+            model=openai_audio_generation_model,
+            voice="shimmer",
+            input=text,
+            instructions="Speak in a cheerful and positive tone.",
+        ) as response:
+            for chunk in response.iter_bytes():
+                audio_bytes.write(chunk)
+        return audio_bytes
+    else:
+        response = gemini_client.models.generate_content(
+                model=gemini_audio_generation_model,
+                contents=text,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name='Kore',
+                            )
+                        )
+                    ),
+                )
+            )
+
+        # Extract the raw PCM data from the response
+        audio_data = response.candidates[0].content.parts[0].inline_data.data
+
+        # Wrap the raw PCM data into a WAV container in memory
+        audio_bytes = io.BytesIO()
+        with wave.open(audio_bytes, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(audio_data)
+
+        # Seek to start so the returned object is ready to be read/played
+        audio_bytes.seek(0)
+        return audio_bytes
 
 def embed_query(text, model="text-embedding-3-small"):
     """
