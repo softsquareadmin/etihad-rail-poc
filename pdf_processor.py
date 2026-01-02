@@ -50,7 +50,7 @@ def extract_text_from_pdf(pdf_path, gemini_api_key):
         
         # Use Gemini to extract text with comprehensive formatting
         model = genai.GenerativeModel(
-            model_name='gemini-2.5-flash',
+            model_name='gemini-2.5-pro',
             generation_config=generation_config
             )
         

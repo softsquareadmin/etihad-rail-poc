@@ -41,7 +41,7 @@ def normalize(name: str):
 if "header_name" not in st.session_state:
     st.session_state.header_name = "Etihad Rail"
 if "gemini_upload" not in st.session_state:
-    st.session_state.gemini_upload = False
+    st.session_state.gemini_upload = True
 if "change_transcription_model" not in st.session_state:
     st.session_state.change_transcription_model = True
 if "category" not in st.session_state:
@@ -647,6 +647,7 @@ with st.sidebar:
     try:
         stats = get_index_stats(pinecone_api_key, pinecone_index_name)
         total_vectors = stats.get("total_vector_count", 0)
+        print(f"{pinecone_index_name} Total Vectors :::::", total_vectors)
         
         if total_vectors == 0:
             st.markdown("""
