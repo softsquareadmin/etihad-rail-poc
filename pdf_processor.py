@@ -400,7 +400,7 @@ Begin extraction now.""",
         return None
 
 def extract_page_data(base64_image, openai_api_key):
-
+    print("Extracting next page...")
     try:
         client = OpenAI(api_key=openai_api_key)
 
@@ -506,25 +506,30 @@ def extract_page_data(base64_image, openai_api_key):
         - Be consistent with emphasis markers
         - Maintain consistent indentation
     
+    15. TOKEN EFFICIENCY:
+        - For Table of Contents or similar lists, do not repeat long strings of dots (e.g., "......."). Use "..." or " . . . " instead.
+        - Avoid unnecessary whitespace or repetitive formatting characters.
+
     IMPORTANT:
-    - DO NOT skip any content
-    - DO NOT summarize - extract everything verbatim
-    - DO maintain logical structure and readability
-    - DO describe visual elements that contain information
-    - DO preserve the semantic meaning and organization
-    - If the document is blank Give empty string in respose, DO NOT fabricate any content
-    - If You see any visual elements like images, charts, graphs etc, describe them what you see and also extract any text present in them.
+    - DO NOT skip any text content.
+    - DO NOT summarize - extract text verbatim.
+    - DO maintain logical structure and readability.
+    - DO describe visual elements that contain information.
+    - DO preserve the semantic meaning and organization.
+    - If the document is blank, give an empty string in response; DO NOT fabricate any content.
+    - DO NOT give an empty string in response unless the page is completely blank.
+    - If you think if some diagrams, charts or any pictorial representations where normal text extraction wont help, describe them clearly based on the context ONLY.
     
     Begin extraction now.
         """
         
         response = client.chat.completions.create(
             model="gpt-4o",
-            # Use Structured Outputs (json_schema) for better reliability in 2026
+            # Use Structured Outputs (json_schema) for better reliability
             response_format = {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "invoice_extraction",
+                    "name": "pdf_page_extraction",
                     "strict": True,
                     "schema": {
                         "type": "object",
@@ -547,12 +552,25 @@ def extract_page_data(base64_image, openai_api_key):
                 }
             ],
             temperature=0.0,
+            max_tokens=4096, # Increased to handle dense pages
         )
         
-        # Check if content exists before returning
-        return response.choices[0].message.content
+        finish_reason = response.choices[0].finish_reason
+        content = response.choices[0].message.content
+        
+        if finish_reason == "length":
+            print("⚠️ Warning: Output truncated due to length limit. Attempting to parse partial JSON.")
+        
+        if not content:
+            print("⚠️ Warning: OpenAI returned empty content")
+            return None
+            
+        print("extracted page")
+        return content
     except Exception as e:
             print(f"Error extracting text from PDF: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
 def extract_from_multiple_pages(base64_images, openai_api_key):
@@ -560,13 +578,40 @@ def extract_from_multiple_pages(base64_images, openai_api_key):
 
     for i, base64_image in enumerate(base64_images):
         page_response = extract_page_data(base64_image, openai_api_key)
-        page_data = json.loads(page_response)
+        
+        if not page_response:
+            print(f"⚠️ Warning: No response for page {i+1}")
+            continue
+            
+        try:
+            page_data = json.loads(page_response)
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON Decode Error on page {i+1}: {e}")
+            print(f"Raw response snippet: {page_response[:200]}...{page_response[-200:] if len(page_response) > 200 else ''}")
+            
+            # Simple "repair" for truncated JSON if using strict schema {"content": "..."}
+            if '{"content":' in page_response and not page_response.strip().endswith('}'):
+                print("🔧 Attempting simple JSON repair for truncation...")
+                try:
+                    # Try to close the string and the object
+                    repaired = page_response.strip()
+                    if not repaired.endswith('"'):
+                        repaired += '"'
+                    if not repaired.endswith('}'):
+                        repaired += '}'
+                    page_data = json.loads(repaired)
+                    print("✅ Repair successful")
+                except:
+                    print("❌ Repair failed")
+                    continue
+            else:
+                continue
+                
         page_data['page_number'] = i + 1
         print("Extracted ::::", page_data)
         whole_response.append(page_data)
 
     output = {'pages': whole_response}
-
     return output
 
 def chunk_text(pages_data, chunk_size=1000, overlap=400):
