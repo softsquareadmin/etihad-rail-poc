@@ -541,7 +541,7 @@ def extract_page_data(base64_image, openai_api_key):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Extract all data from this invoice into JSON format."},
+                        {"type": "text", "text": "Extract all data from this Document page into JSON format."},
                         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}", "detail": "high"}}
                     ]
                 }
