@@ -8,6 +8,7 @@ from pinecone import Pinecone
 import base64
 import io
 from urllib.parse import unquote
+import re
 
 def pinecone_index_is_empty(pinecone_api_key, pinecone_index_name):
     pc = Pinecone(api_key=pinecone_api_key)
@@ -30,12 +31,13 @@ gemini_api_key = os.getenv("GEMINI_API_KEY")
 
 URL_LIST = [
                 "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/om_pead-rp71-140jaa_kd79d904h01%20(1).pdf", 
-                "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/nmc110.pdf"
+                "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/nmc110.pdf",
+                "https://raw.githubusercontent.com/Maniyuvi/CSvFile/main/O&M Manual-Packaged Air Conditioner_SKM.pdf"
             ]
 
 def normalize(name: str):
     name = unquote(name)
-    name = name.replace(" ", "_")
+    name = re.sub(r'[^a-zA-Z0-9]', '', name)
     return name.lower()
 
 if "header_name" not in st.session_state:
