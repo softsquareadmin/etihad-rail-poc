@@ -6,6 +6,9 @@ from pinecone import Pinecone
 import google.generativeai as genai
 import httpx
 import base64
+from PIL import Image
+import fitz
+import io
 
 def extract_text_from_pdf(pdf_path, gemini_api_key):
     """
@@ -185,6 +188,33 @@ Begin extraction now."""
     except Exception as e:
         print(f"Error extracting text from PDF: {e}")
         return None
+
+@staticmethod
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+    
+def pdf_to_base64_images(pdf_path):
+    #Handles PDFs with multiple pages
+    pdf_document = fitz.open(pdf_path)
+    base64_images = []
+    temp_image_paths = []
+
+    total_pages = len(pdf_document)
+
+    for page_num in range(total_pages):
+        page = pdf_document.load_page(page_num)
+        pix = page.get_pixmap()
+        img = Image.open(io.BytesIO(pix.tobytes()))
+        temp_image_path = f"temp_page_{page_num}.png"
+        img.save(temp_image_path, format="PNG")
+        temp_image_paths.append(temp_image_path)
+        base64_image = encode_image(temp_image_path)
+        base64_images.append(base64_image)
+
+    for temp_image_path in temp_image_paths:
+        os.remove(temp_image_path)
+    return base64_images
 
 def extract_text_from_pdf_openai(pdf_path, openai_api_key):
     """
@@ -369,6 +399,176 @@ Begin extraction now.""",
         print(f"Error extracting text from PDF: {e}")
         return None
 
+def extract_page_data(base64_image, openai_api_key):
+
+    try:
+        client = OpenAI(api_key=openai_api_key)
+
+        system_prompt = """
+    📋 FORMATTING GUIDELINES:
+    
+    1. PAGE MARKERS:
+    Start each page with a clear separator
+    
+    2. HIERARCHY & STRUCTURE:
+    - Document title: # TITLE (use single #)
+    - Major sections: ## SECTION NAME (use double ##)
+    - Subsections: ### SUBSECTION NAME (use triple ###)
+    - Always add blank lines before and after headings
+    
+    3. TABLES:
+    Mark tables clearly and preserve structure:
+    📊 TABLE: [Brief description if title exists]
+    | Column 1    | Column 2    | Column 3    |
+    |-------------|-------------|-------------|
+    | Data 1      | Data 2      | Data 3      |
+    | Data 4      | Data 5      | Data 6      |
+    
+    Add blank line before and after tables.
+    
+    4. LISTS:
+    - Numbered lists: Use 1., 2., 3., etc.
+    - Bullet points: Use • or - consistently
+    - Indent sub-items with 2-4 spaces
+    - Keep list items together (don't break mid-list)
+    
+    5. SPECIAL ELEMENTS:
+    Mark different content types clearly:
+    - Warnings: ⚠️ WARNING: [text]
+    - Cautions: ⚠️ CAUTION: [text]
+    - Important notes: 📌 NOTE: [text]
+    - Tips: 💡 TIP: [text]
+    - Instructions: 📝 INSTRUCTIONS:
+    - Examples: 💬 EXAMPLE:
+    
+    6. VISUAL CONTENT:
+    Describe non-text elements:
+    - Images: 🖼️ [IMAGE: Brief description]
+    - Diagrams: 📊 [DIAGRAM: What it shows]
+    - Charts: 📈 [CHART: Type and content]
+    - Photos: 📷 [PHOTO: Subject]
+    - Icons/symbols: [ICON: Description]
+    
+    7. DATA & SPECIFICATIONS:
+    For key-value pairs, use consistent format:
+    Property: Value
+    Another Property: Another Value
+    
+    Group related information together with blank lines between groups.
+    
+    8. PROCEDURES & STEPS:
+    For sequential instructions:
+    ## Procedure Name
+    
+    1. First step description
+        - Sub-point if needed
+        - Another sub-point
+    
+    2. Second step description
+    
+    3. Third step description
+    
+    9. CONTACT INFORMATION:
+    Mark clearly:
+    📞 CONTACT INFORMATION
+    - Phone: [number]
+    - Email: [address]
+    - Website: [url]
+    
+    10. LEGAL/WARRANTY TEXT:
+        Mark sections:
+        📜 [SECTION TYPE: Warranty/Terms/Legal]
+        Keep original numbering (1., a., i., etc.)
+    
+    11. SEMANTIC ORDER:
+        - Follow natural reading order (top-to-bottom, left-to-right)
+        - Keep related content together
+        - Don't split tables, lists, or procedures
+        - Maintain logical flow of information
+    
+    12. SPACING & READABILITY:
+        - Blank line between different sections
+        - Blank line before/after tables
+        - Blank line before/after special callouts
+        - Blank line before/after lists
+        - No excessive blank lines (max 2 in a row)
+    
+    13. TEXT EXTRACTION:
+        - Extract text from images using OCR
+        - Extract text from embedded screenshots
+        - Extract data from charts/graphs if text is visible
+        - Preserve text in headers/footers if important
+        - Include text in watermarks if relevant
+    
+    14. FORMATTING CONSISTENCY:
+        - Use the same style throughout the document
+        - Be consistent with bullets (• or -)
+        - Be consistent with emphasis markers
+        - Maintain consistent indentation
+    
+    IMPORTANT:
+    - DO NOT skip any content
+    - DO NOT summarize - extract everything verbatim
+    - DO maintain logical structure and readability
+    - DO describe visual elements that contain information
+    - DO preserve the semantic meaning and organization
+    - If the document is blank Give empty string in respose, DO NOT fabricate any content
+    - If You see any visual elements like images, charts, graphs etc, describe them what you see and also extract any text present in them.
+    
+    Begin extraction now.
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            # Use Structured Outputs (json_schema) for better reliability in 2026
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "invoice_extraction",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string"}
+                        },
+                        "required": ["content"],
+                        "additionalProperties": False
+                    }
+                }
+            },
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Extract all data from this invoice into JSON format."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}", "detail": "high"}}
+                    ]
+                }
+            ],
+            temperature=0.0,
+        )
+        
+        # Check if content exists before returning
+        return response.choices[0].message.content
+    except Exception as e:
+            print(f"Error extracting text from PDF: {e}")
+            return None
+
+def extract_from_multiple_pages(base64_images, openai_api_key):
+    whole_response = []
+
+    for i, base64_image in enumerate(base64_images):
+        page_response = extract_page_data(base64_image, openai_api_key)
+        page_data = json.loads(page_response)
+        page_data['page_number'] = i + 1
+        print("Extracted ::::", page_data)
+        whole_response.append(page_data)
+
+    output = {'pages': whole_response}
+
+    return output
+
 def chunk_text(pages_data, chunk_size=1000, overlap=400):
     """
     Split text into overlapping chunks for better context preservation
@@ -485,14 +685,15 @@ def process_pdf_and_upload(pdf_path, gemini_api_key, openai_api_key, pinecone_ap
         if use_gemini:
             json_response = extract_text_from_pdf(pdf_path, gemini_api_key)
         else:
-            json_response = extract_text_from_pdf_openai(pdf_path, openai_api_key)
+            base64_images = pdf_to_base64_images(pdf_path)
+            json_response = extract_from_multiple_pages(base64_images, openai_api_key)
         
         if not json_response:
             print("Failed to extract text from PDF")
             return False
         
         try:
-            parsed_data = json.loads(json_response)
+            parsed_data = json.loads(json_response) if isinstance(json_response, str) else json_response
             pages_data = parsed_data.get("pages", [])
             
             if not pages_data:
